@@ -1,78 +1,200 @@
 <template>
-  <slot>
+  <div class="login-wrapper">
+    <div class="left-panel">
+      <h1 class="title">ChatOn</h1>
+      <p class="subtitle">실시간 대화의 시작<br />지금 바로 연결하세요.</p>
+      <div class="bubbles">
+        <div class="bubble bubble-1"></div>
+        <div class="bubble bubble-2"></div>
+        <div class="bubble bubble-3"></div>
+      </div>
+    </div>
+    <div class="right-panel">
+      <div class="form-box">
+        <h2>로그인</h2>
+        <input v-model="id" type="text" placeholder="아이디" />
+        <input v-model="pw" type="password" placeholder="비밀번호" />
+        <button class="btn-login" @click="login">로그인</button>
 
-    <MainHeader/>
-  </slot>
-  <v-container>
-    <div class="input-container">
-      <label>아이디</label>
-      <input type="text" :value="id" @input="id = $event.target.value" placeholder="아이디 입력해주세요"/>
+        <div class="divider">또는</div>
+        <div class="social-buttons">
+          <button class="google">
+            <img src="https://developers.google.com/identity/images/g-logo.png" alt="Google Logo" />
+            Google 로그인
+          </button>
+          <button class="kakao">
+            <img src="@/assets/kakao.png" alt="Kakao Logo" />
+            Kakao 로그인
+          </button>
+        </div>
+
+        <p class="signup">계정이 없으신가요? <a href="#">회원가입 →</a></p>
+      </div>
     </div>
-    <div class="input-container">
-      <label>비밀번호</label>
-      <input type="text" :value="pw" @input="pw = $event.target.value"/>
-    </div>
-    <button class="btn btn-primary" @click="login(id, pw)">로그인</button>
-  </v-container>
+  </div>
 </template>
 
 <script>
-import MainHeader from "@/components/component/MainHeader.vue"
-
-const HOST = "";
 export default {
-  name: 'HelloWorld',
-  components: {
-    MainHeader,
+  name: 'ChatLogin',
+  data() {
+    return {
+      id: '',
+      pw: '',
+    };
   },
-
   methods: {
-
-    login(id, pw) {
-      console.log(id)
-      console.log(pw)
-      const loginData = {
-        userId: id,
-        password: pw
-      };
-      console.log(loginData)
-      this.$axios
-          .post(HOST + "/api/v1/users/login", loginData)
-          .then((res) => {
-
-            console.log(res.data)
-            console.log(res)
-            console.log("log: " + res)
-            this.$cookies.set("idCookie", res.data)
-            // cookie를
-
-
-          })
-          .catch((error) => {
-            console.log(error)
-          })
-    }
-  }
-}
-
+    login() {
+      console.log('로그인 요청:', this.id, this.pw);
+      // 로그인 요청 처리 로직
+    },
+  },
+};
 </script>
 
 <style scoped>
-.input-container {
-  margin-bottom: 15px;
+.login-wrapper {
+  display: flex;
+  height: 100vh;
+  background: linear-gradient(to right, #e0f7fa, #ffffff);
+  font-family: 'Pretendard', sans-serif;
 }
 
-.input-container label {
+.left-panel {
+  flex: 1;
+  background-color: #f0f9ff;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  position: relative;
+  padding: 2rem;
+  color: #222;
+}
+
+.title {
+  font-size: 48px;
+  font-weight: bold;
+  margin-bottom: 1rem;
+}
+
+.subtitle {
+  font-size: 18px;
+  text-align: center;
+  line-height: 1.6;
+}
+
+.bubbles {
+  position: absolute;
+  bottom: 2rem;
+  display: flex;
+  gap: 8px;
+}
+.bubble {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background-color: #9ac8f0;
+  animation: float 1.6s infinite ease-in-out;
+}
+.bubble-2 { animation-delay: 0.2s; }
+.bubble-3 { animation-delay: 0.4s; }
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+
+.right-panel {
+  flex: 1;
+  background-color: white;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 2rem;
+}
+
+.form-box {
+  width: 100%;
+  max-width: 340px;
+  padding: 2rem;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  background: #ffffff;
+}
+
+.form-box h2 {
+  margin-bottom: 1.5rem;
+  text-align: center;
+}
+
+input {
   display: block;
-  margin-bottom: 5px;
+  width: 100%;
+  padding: 10px;
+  margin-bottom: 1rem;
+  border: 1px solid #ccc;
+  border-radius: 6px;
 }
 
-.input-container input {
-  width: 25%;
-  padding: 5px;
-  border: 1px solid #ccc; /* 테두리 스타일 지정 */
-  border-radius: 4px; /* 테두리 둥글게 */
-  box-sizing: border-box; /* 패딩과 테두리 두께를 요소의 너비에 포함 */
+.btn-login {
+  width: 100%;
+  padding: 10px;
+  background: #007bff;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  margin-bottom: 1rem;
+  cursor: pointer;
+}
+
+.divider {
+  text-align: center;
+  margin: 1rem 0;
+  color: #aaa;
+}
+
+.social-buttons button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px;
+  margin-bottom: 0.5rem;
+  border-radius: 6px;
+  border: 1px solid #ccc;
+  background-color: #f8f9fa;
+  cursor: pointer;
+}
+.social-buttons img {
+  width: 20px;
+  height: 20px;
+}
+
+.signup {
+  text-align: center;
+  margin-top: 1rem;
+  font-size: 14px;
+}
+.signup a {
+  color: #007bff;
+  text-decoration: none;
+}
+.signup a:hover {
+  text-decoration: underline;
+}
+
+@media screen and (max-width: 768px) {
+  .login-wrapper {
+    flex-direction: column;
+  }
+  .left-panel, .right-panel {
+    flex: none;
+    width: 100%;
+    min-height: 50vh;
+  }
+  .left-panel {
+    padding-top: 3rem;
+    padding-bottom: 1rem;
+  }
 }
 </style>
-
