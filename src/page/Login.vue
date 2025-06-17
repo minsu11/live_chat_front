@@ -74,6 +74,7 @@
 </template>
 
 <script>
+import '@/assets/css/chat-login.css'
 export default {
   name: 'ChatLogin',
   data() {
@@ -84,156 +85,14 @@ export default {
   },
   methods: {
     login() {
+
       console.log('로그인 요청:', this.id, this.pw);
-      // 로그인 요청 처리 로직
+
     },
   },
 };
 </script>
 
 <style scoped>
-.login-wrapper {
-  display: flex;
-  height: 100vh;
-  background: linear-gradient(to right, #e0f7fa, #ffffff);
-  font-family: 'Pretendard', sans-serif;
-}
 
-.left-panel {
-  flex: 1;
-  background-color: #f0f9ff;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
-  position: relative;
-  padding: 2rem;
-  color: #222;
-}
-
-.title {
-  font-size: 48px;
-  font-weight: bold;
-  margin-bottom: 1rem;
-}
-
-.subtitle {
-  font-size: 18px;
-  text-align: center;
-  line-height: 1.6;
-}
-
-.bubbles {
-  position: absolute;
-  bottom: 2rem;
-  display: flex;
-  gap: 8px;
-}
-.bubble {
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  background-color: #9ac8f0;
-  animation: float 1.6s infinite ease-in-out;
-}
-.bubble-2 { animation-delay: 0.2s; }
-.bubble-3 { animation-delay: 0.4s; }
-@keyframes float {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-8px); }
-}
-
-.right-panel {
-  flex: 1;
-  background-color: white;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  padding: 2rem;
-}
-
-.form-box {
-  width: 100%;
-  max-width: 340px;
-  padding: 2rem;
-  border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-  background: #ffffff;
-}
-
-.form-box h2 {
-  margin-bottom: 1.5rem;
-  text-align: center;
-}
-
-input {
-  display: block;
-  width: 100%;
-  padding: 10px;
-  margin-bottom: 1rem;
-  border: 1px solid #ccc;
-  border-radius: 6px;
-}
-
-.btn-login {
-  width: 100%;
-  padding: 10px;
-  background: #007bff;
-  color: white;
-  border: none;
-  border-radius: 6px;
-  margin-bottom: 1rem;
-  cursor: pointer;
-}
-
-.divider {
-  text-align: center;
-  margin: 1rem 0;
-  color: #aaa;
-}
-
-.social-buttons button {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-  padding: 10px;
-  margin-bottom: 0.5rem;
-  border-radius: 6px;
-  border: 1px solid #ccc;
-  background-color: #f8f9fa;
-  cursor: pointer;
-}
-.social-buttons img {
-  width: 20px;
-  height: 20px;
-}
-
-.signup {
-  text-align: center;
-  margin-top: 1rem;
-  font-size: 14px;
-}
-.signup a {
-  color: #007bff;
-  text-decoration: none;
-}
-.signup a:hover {
-  text-decoration: underline;
-}
-
-@media screen and (max-width: 768px) {
-  .login-wrapper {
-    flex-direction: column;
-  }
-  .left-panel, .right-panel {
-    flex: none;
-    width: 100%;
-    min-height: 50vh;
-  }
-  .left-panel {
-    padding-top: 3rem;
-    padding-bottom: 1rem;
-  }
-}
 </style>
