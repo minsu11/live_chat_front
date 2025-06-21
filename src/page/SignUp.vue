@@ -169,7 +169,7 @@ export default {
         };
         console.log(signData);
 
-        this.$axios.post(HOST + "/api/v1/users/sign", signData)
+        this.$axios.post(HOST + "/api/v1/users/register", signData)
             .then((res) => {
               if (res.data.isSuccess) {
                 console.log("회원가입 성공")

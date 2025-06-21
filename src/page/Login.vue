@@ -18,7 +18,7 @@
           <h2>로그인</h2>
           <v-form>
             <v-text-field
-                v-model="id"
+                v-model="userId"
                 label="아이디"
                 dense
                 outlined
@@ -26,7 +26,7 @@
                 class="mb-4"
             />
             <v-text-field
-                v-model="pw"
+                v-model="password"
                 label="비밀번호"
                 type="password"
                 dense
@@ -74,20 +74,30 @@
 </template>
 
 <script>
+import api from '@/axios.js'
 import '@/assets/css/chat-login.css'
 export default {
   name: 'ChatLogin',
   data() {
     return {
-      id: '',
-      pw: '',
+      userId: '',
+      password: '',
     };
   },
   methods: {
-    login() {
+    async login() {
+      console.log("login request")
+      try{
+        const res = await api.post('/v1/users/login', {
+          userId: this.userId,
+          password: this.password
+        })
 
-      console.log('로그인 요청:', this.id, this.pw);
+        console.log("login success")
+        this.$router.push('/');
+      }catch(e){
 
+      }
     },
   },
 };
