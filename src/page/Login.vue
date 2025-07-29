@@ -74,7 +74,7 @@
 </template>
 
 <script>
-import api from '@/axios.js'
+import api from '@/plugins/axios.js'
 import '@/assets/css/chat-login.css'
 export default {
   name: 'ChatLogin',
