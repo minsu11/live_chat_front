@@ -94,7 +94,7 @@ export default {
         })
 
         console.log("login success")
-        this.$router.push('/');
+        this.$router.push('/home');
       }catch(e){
 
       }

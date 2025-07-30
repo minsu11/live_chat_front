@@ -4,13 +4,14 @@ import Home from '@/page/Home.vue'
 const routes = [
     {
         path: '/login',
-        name: 'HelloWorld',
+        name: 'loginPage',
+        alias: '/', // 같은 경로 사용
         component: () => import('@/page/Login.vue'),
     },
     {
-        path: '/',
+        path: '/home',
         name: 'HomePage',
-        component: Home,
+        component: () => import('@/page/Home.vue'),
     },
     {
         path: '/admin/',
