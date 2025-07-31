@@ -94,9 +94,11 @@ export default {
         })
 
         console.log("login success")
+        await new Promise(resolve => setTimeout(resolve, 50)); // 쿠키 저장 시간 확보
+        this.$cookies.set('loginDummy','test', 'test');
         this.$router.push('/home');
       }catch(e){
-
+       console.log("login cathch 문 ")
       }
     },
   },
