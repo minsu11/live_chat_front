@@ -124,7 +124,7 @@
 </template>
 
 <script>
-import MainHeader from "@/components/component/MainHeader.vue";
+import MainHeader from "@/components/MainHeader.vue";
 import moment from 'moment';
 
 const HOST = "";

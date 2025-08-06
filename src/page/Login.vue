@@ -75,7 +75,9 @@
 
 <script>
 import api from '@/plugins/axios.js'
+import { connectWebSocket } from '@/services/ws-client.js' // 추가
 import '@/assets/css/chat-login.css'
+
 export default {
   name: 'ChatLogin',
   data() {
@@ -96,6 +98,9 @@ export default {
         console.log("login success")
         await new Promise(resolve => setTimeout(resolve, 50)); // 쿠키 저장 시간 확보
         this.$cookies.set('loginDummy','test', 'test');
+
+        connectWebSocket();
+
         this.$router.push('/home');
       }catch(e){
        console.log("login cathch 문 ")

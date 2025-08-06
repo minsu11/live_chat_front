@@ -3,6 +3,7 @@
     <div class="chat-layout">
       <!-- 왼쪽 사이드바 -->
       <aside class="sidebar">
+        <!-- 로고 -->
         <h2 class="logo">ChatOn</h2>
 
         <!-- 메뉴 버튼 -->
@@ -29,30 +30,34 @@
 
         <!-- 목록 -->
         <div class="list-container">
+          <!-- 친구 목록 -->
           <template v-if="currentView === 'friends'">
             <p class="list-title">친구 목록</p>
             <ul v-if="friends.length > 0">
               <li
                   v-for="(friend, idx) in friends"
                   :key="idx"
-                  @click="openChat(friend.name)"
+                  @click="openChat(friend, 'friend')"
                   class="list-item"
               >
+                <img :src="friend.profile || defaultProfile" class="profile-img" />
                 {{ friend.name }}
               </li>
             </ul>
             <p v-else class="empty-text">친구가 없습니다 🐰</p>
           </template>
 
+          <!-- 대화방 목록 -->
           <template v-if="currentView === 'chats'">
             <p class="list-title">대화방 목록</p>
             <ul v-if="chats.length > 0">
               <li
                   v-for="(chat, idx) in chats"
                   :key="idx"
-                  @click="openChat(chat.title)"
+                  @click="openChat(chat, 'chat')"
                   class="list-item"
               >
+                <img :src="chat.profile || defaultProfile" class="profile-img" />
                 {{ chat.title }}
               </li>
             </ul>
@@ -73,8 +78,6 @@
               {{ msg }}
             </p>
           </div>
-
-          <!-- 메시지 입력창 -->
           <div class="chat-input">
             <v-text-field
                 v-model="newMessage"
@@ -93,22 +96,35 @@
 </template>
 
 <script>
+import defaultProfile from '@/assets/default_image.png' // 기본 이미지 import
+
 export default {
   name: "ChatPage",
   data() {
     return {
       currentView: "friends",
-      friends: [{ name: "철수" }, { name: "영희" }],
-      chats: [{ title: "철수와의 대화" }],
+      defaultProfile, // 기본 프로필 이미지
+      friends: [
+        { name: "철수", profile: "" },
+        { name: "영희", profile: "" }
+      ],
+      chats: [
+        { title: "철수와의 대화", profile: "https://example.com/chulsoo.png" }
+      ],
       selectedChat: "",
       messages: [],
       newMessage: ""
     };
   },
   methods: {
-    openChat(name) {
-      this.selectedChat = name;
-      this.messages = ["안녕!", "오랜만이야"];
+    openChat(item, type) {
+      if (type === "friend") {
+        this.selectedChat = item.name;
+        this.messages = [`${item.name}님과 대화를 시작합니다.`];
+      } else if (type === "chat") {
+        this.selectedChat = item.title;
+        this.messages = ["안녕!", "오랜만이야"];
+      }
       this.scrollToBottom();
     },
     sendMessage() {
@@ -132,7 +148,6 @@ export default {
   display: flex;
   height: 100vh;
 }
-
 .sidebar {
   width: 250px;
   background: #ffffff;
@@ -141,7 +156,6 @@ export default {
   display: flex;
   flex-direction: column;
 }
-
 .logo {
   font-size: 20px;
   font-weight: bold;
@@ -149,73 +163,69 @@ export default {
   color: #4dabf7;
   text-align: center;
 }
-
 .menu-buttons {
   display: flex;
   gap: 8px;
   justify-content: center;
   margin-bottom: 15px;
 }
-
 .menu-btn {
   font-size: 13px;
   padding: 6px 12px;
   min-width: auto !important;
 }
-
 .list-title {
   font-size: 14px;
   font-weight: bold;
   margin-bottom: 5px;
 }
-
 .list-container {
   flex: 1;
   overflow-y: auto;
 }
-
 .list-item {
   padding: 8px;
   border-radius: 5px;
   cursor: pointer;
+  display: flex;
+  align-items: center;
 }
-
 .list-item:hover {
   background: #f1f3f5;
 }
-
+.profile-img {
+  width: 25px;
+  height: 25px;
+  border-radius: 50%;
+  margin-right: 8px;
+}
 .empty-text {
   font-size: 13px;
   color: #868e96;
   text-align: center;
   margin-top: 20px;
 }
-
 .chat-area {
   flex: 1;
   display: flex;
   flex-direction: column;
 }
-
 .empty-chat {
   margin: auto;
   font-size: 16px;
   color: #868e96;
 }
-
 .chat-room {
   display: flex;
   flex-direction: column;
   flex: 1;
   padding: 20px;
 }
-
 .chat-title {
   font-size: 18px;
   font-weight: bold;
   margin-bottom: 10px;
 }
-
 .chat-messages {
   background: #f8f9fa;
   border-radius: 8px;
@@ -223,11 +233,9 @@ export default {
   flex: 1;
   overflow-y: auto;
 }
-
 .message {
   margin-bottom: 5px;
 }
-
 .chat-input {
   display: flex;
   gap: 10px;

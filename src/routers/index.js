@@ -39,9 +39,12 @@ router.beforeEach((to, from, next) => {
 
     if (!hasToken && to.name !== 'loginPage') {
         console.log("if문 안에 있음")
+        console.log("cookie 존재 하지 않음")
         next({ name: 'loginPage' });
     } else {
+        // todo dummy cookie 없는데, access token cookie 있을 경우, access token 및 refresh token 대해서 어떻게 처리를 할 것인가?
         console.log("else 문 확인")
+        console.log("cookie 존재")
         next();
     }
 });

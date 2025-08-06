@@ -8,6 +8,7 @@ import VueCookies from "vue-cookies"
 import VueDatePicker from "@vuepic/vue-datepicker"
 import '@vuepic/vue-datepicker/dist/main.css'
 
+
 loadFonts()
 const app = createApp(App)
 app.use(router)
