@@ -1,28 +1,59 @@
-// src/services/ws-client.js
+// ws-client.js (Vue용 WebSocket 클라이언트 with @stomp/stompjs)
+import { Client } from '@stomp/stompjs';
+import api from '@/plugins/axios.js';
 import SockJS from 'sockjs-client';
-import Stomp from 'stompjs';
-import axios from '@/plugins/axios.js';
+
 
 let stompClient = null;
 let reconnectTimeout = null;
-let subscriptions = []; // 구독 목록 저장
-let lastMessageTimestamps = {}; // 채널별 마지막 메시지 시간 기록
-
-export function connectWebSocket() {
+let subscriptions = [];
+let lastMessageTimestamps = {};
+let retryCount = 0;
+const MAX_RETRIES = 5;
+export async function connectWebSocket() {
     console.log('🔌 WebSocket 연결 시도');
+    // access token data 가지고 오기
 
-    const socket = new SockJS(`/ws/chat`);
-    stompClient = Stomp.over(socket);
 
-    stompClient.connect({}, () => {
-        console.log('✅ WebSocket connected');
+    try{
+        const res = await api.get('/ws/token');
+        const accessToken = res;
+        console.log("token 가지고 옴")
+        console.log("cookie: " + accessToken)
 
-        // 기존 구독 복원
-        reconnectSubscriptions();
-    }, async (error) => {
-        console.error('❌ WebSocket error:', error);
-        attemptReconnect();
-    });
+        stompClient = new Client({
+            webSocketFactory: () => new SockJS('http://localhost:7070/ws-chat'), // 여기 중요
+            connectHeaders: {
+                Authorization: `Bearer ${accessToken}`, // 헤더에 붙임
+            },
+            reconnectDelay: 0,
+            onConnect: () => {
+                console.log('✅ WebSocket connected');
+
+                // reconnectSubscriptions();
+            },
+            onStompError: (frame) => {
+                console.error('❌ STOMP Error:', frame);
+                // attemptReconnect();
+            },
+            onWebSocketClose: () => {
+                console.warn('🔌 WebSocket closed');
+                // attemptReconnect();
+                if (retryCount < MAX_RETRIES) {
+                    retryCount++;
+                    console.log(`🔁 ${retryCount}번째 WebSocket 재연결 시도`);
+                    setTimeout(() => connectWebSocket(), 3000);
+                } else {
+                    console.error('❌ WebSocket 재연결 중단 (최대 시도 초과)');
+                }
+            },
+        });
+
+        stompClient.activate();
+    }catch(e){
+        console.error("error")
+    }
+
 }
 
 export function subscribe(destination, callback) {
@@ -33,7 +64,7 @@ export function subscribe(destination, callback) {
 
     const sub = stompClient.subscribe(destination, (message) => {
         const data = JSON.parse(message.body);
-        lastMessageTimestamps[destination] = Date.now(); // 마지막 메시지 시간 기록
+        lastMessageTimestamps[destination] = Date.now();
         callback(data);
     });
 
@@ -43,7 +74,7 @@ export function subscribe(destination, callback) {
 
 export function sendMessage(destination, payload) {
     if (stompClient && stompClient.connected) {
-        stompClient.send(destination, {}, JSON.stringify(payload));
+        stompClient.publish({ destination, body: JSON.stringify(payload) });
     } else {
         console.warn('⚠️ WebSocket이 연결되어 있지 않습니다.');
     }
@@ -51,7 +82,7 @@ export function sendMessage(destination, payload) {
 
 export function disconnectWebSocket() {
     if (stompClient) {
-        stompClient.disconnect();
+        stompClient.deactivate();
         console.log('🔌 WebSocket disconnected');
     }
 }
@@ -61,14 +92,10 @@ async function fetchMissedMessages(destination, callback) {
     if (!lastTimestamp) return;
 
     try {
-        // 예: /messages API에 채널명과 마지막 시간 전달
         const res = await axios.get(`/messages`, {
-            params: { channel: destination, since: lastTimestamp }
+            params: { channel: destination, since: lastTimestamp },
         });
-
-        res.forEach(msg => {
-            callback(msg);
-        });
+        res.forEach(msg => callback(msg));
         console.log(`📥 ${destination} 채널의 누락 메시지 불러옴`);
     } catch (err) {
         console.error(`❌ ${destination} 채널 누락 메시지 불러오기 실패`, err);
@@ -83,7 +110,6 @@ function reconnectSubscriptions() {
             callback(data);
         });
 
-        // 재구독 직후 누락 메시지 채우기
         fetchMissedMessages(destination, callback);
     });
 }

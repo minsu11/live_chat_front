@@ -99,6 +99,7 @@ export default {
         await new Promise(resolve => setTimeout(resolve, 50)); // 쿠키 저장 시간 확보
         this.$cookies.set('loginDummy','test', 'test');
 
+        console.log("web socket connect")
         connectWebSocket();
 
         this.$router.push('/home');
