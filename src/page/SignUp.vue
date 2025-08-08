@@ -126,6 +126,7 @@
 <script>
 import MainHeader from "@/components/MainHeader.vue";
 import moment from 'moment';
+import api from "@/plugins/axios.js";
 
 const HOST = "";
 export default {
@@ -167,18 +168,15 @@ export default {
           gender: this.gender,
           age: this.age
         };
-        console.log(signData);
 
-        this.$axios.post(HOST + "/api/v1/users/register", signData)
+        api.post(HOST + "/v1/users/register", signData)
             .then((res) => {
-              if (res.data.isSuccess) {
+              console.log("response")
+              console.log(res)
                 console.log("회원가입 성공")
                 alert('회원가입 성공');
                 this.$router.push("/")
-              } else {
-                alert('회원가입 실패');
-
-              }
+                alert
             });
       }
     },

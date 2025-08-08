@@ -28,6 +28,7 @@ api.interceptors.response.use(
         const { status, message, data } = response.data;
         console.log("message : " + message);
         if (status >= 200 && status < 300) {
+            console.log("성공 처리")
             return data;
         } else {
             return Promise.reject({ status, message });

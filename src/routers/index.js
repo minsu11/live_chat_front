@@ -37,7 +37,7 @@ router.beforeEach((to, from, next) => {
     const hasToken = document.cookie.includes("loginDummy");
 
 
-    if (!hasToken && to.name !== 'loginPage') {
+    if (!hasToken && to.name !== 'loginPage' && to.name !== 'signUp') {
         console.log("if문 안에 있음")
         console.log("cookie 존재 하지 않음")
         next({ name: 'loginPage' });
