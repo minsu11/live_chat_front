@@ -18,6 +18,13 @@ jobs:
         with:
           node-version: 18   # or 24.2.0 (민수님 로컬 버전)
 
+      # .env.production 생성 (Secrets 값 사용)
+      - name: Create .env.production
+        run: |
+          echo "VITE_API_URL=${{ secrets.FRONT_API_URL }}" >> .env.production
+          echo "VITE_AUTH_URL=${{ secrets.FRONT_AUTH_URL }}" >> .env.production
+
+
       # 3. Vue 빌드
       - name: Install and Build
         run: |
