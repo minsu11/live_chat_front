@@ -12,11 +12,11 @@ jobs:
       # 1. 소스 체크아웃
       - uses: actions/checkout@v4
 
-      # 2. Node.js 세팅 (민수님 환경 맞추려면 24.2.0, 안정성 원하면 18)
+      # 2. Node.js 세팅 (로컬과 동일 or LTS)
       - name: Setup Node.js
         uses: actions/setup-node@v3
         with:
-          node-version: 24.2.0   # 또는 18
+          node-version: 18   # or 24.2.0 (민수님 로컬 버전)
 
       # 3. Vue 빌드
       - name: Install and Build
@@ -41,7 +41,7 @@ jobs:
               echo "✅ Backup created: dist-$TIMESTAMP"
             fi
 
-      # 5. 새 dist 업로드
+      # 5. 새 dist 업로드 (중첩 방지)
       - name: Upload New Build
         uses: appleboy/scp-action@v0.1.7
         with:
@@ -49,5 +49,5 @@ jobs:
           username: ${{ secrets.SSH_ID }}
           key: ${{ secrets.SSH_KEY }}
           port: ${{ secrets.SSH_PORT }}
-          source: "dist/*"
-          target: "/home/ta/minsu11/chat_server/frontend/dist"
+          source: "dist"
+          target: "/home/ta/minsu11/chat_server/frontend"
