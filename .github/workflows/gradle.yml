@@ -1,0 +1,53 @@
+name: Frontend CI/CD
+
+on:
+  push:
+    branches: [ "main" ]   # main 브랜치 push 시 실행
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. 소스 체크아웃
+      - uses: actions/checkout@v4
+
+      # 2. Node.js 세팅 (민수님 환경 맞추려면 24.2.0, 안정성 원하면 18)
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 24.2.0   # 또는 18
+
+      # 3. Vue 빌드
+      - name: Install and Build
+        run: |
+          npm install
+          npm run build
+
+      # 4. 서버에서 기존 dist 백업
+      - name: Backup Old Dist
+        uses: appleboy/ssh-action@v0.1.10
+        with:
+          host: ${{ secrets.SSH_IP }}
+          username: ${{ secrets.SSH_ID }}
+          key: ${{ secrets.SSH_KEY }}
+          port: ${{ secrets.SSH_PORT }}
+          script: |
+            DEPLOY_PATH=/home/ta/minsu11/chat_server/frontend
+            mkdir -p $DEPLOY_PATH/backups
+            if [ -d "$DEPLOY_PATH/dist" ]; then
+              TIMESTAMP=$(date +'%Y%m%d-%H%M%S')
+              mv $DEPLOY_PATH/dist $DEPLOY_PATH/backups/dist-$TIMESTAMP
+              echo "✅ Backup created: dist-$TIMESTAMP"
+            fi
+
+      # 5. 새 dist 업로드
+      - name: Upload New Build
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.SSH_IP }}
+          username: ${{ secrets.SSH_ID }}
+          key: ${{ secrets.SSH_KEY }}
+          port: ${{ secrets.SSH_PORT }}
+          source: "dist/*"
+          target: "/home/ta/minsu11/chat_server/frontend/dist"
