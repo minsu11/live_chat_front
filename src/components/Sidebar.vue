@@ -43,14 +43,13 @@
 </template>
 
 <script>
-import FriendList from '@/components/sidebar/FriendList.vue';
 import ChatList from '@/components/sidebar/ChatList.vue';
 import SearchResults from '@/components/search/SearchResults.vue';
 import api from '@/plugins/axios.js';
 
 export default {
   name: 'Sidebar',
-  components: { FriendList, ChatList, SearchResults },
+  components: { ChatList, SearchResults },
   props: { currentView: { type: String, default: 'friends' } },
   data() {
     return { searchKeyword: '' };
