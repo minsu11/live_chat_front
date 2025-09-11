@@ -24,6 +24,9 @@ jobs:
           echo "VITE_API_URL=${{ secrets.FRONT_API_URL }}" >> .env.production
           echo "VITE_AUTH_URL=${{ secrets.FRONT_AUTH_URL }}" >> .env.production
 
+      - name: Debug .env.production
+        run: cat .env.production
+
 
       # 3. Vue 빌드
       - name: Install and Build
