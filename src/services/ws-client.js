@@ -22,7 +22,7 @@ export async function connectWebSocket() {
         console.log("cookie: " + accessToken)
 
         stompClient = new Client({
-            webSocketFactory: () => new SockJS('http://localhost:7070/ws-chat'), // 여기 중요
+            webSocketFactory: () => new SockJS('http://localhost:7070/api/ws-chat'), // 여기 중요
             connectHeaders: {
                 Authorization: `Bearer ${accessToken}`, // 헤더에 붙임
             },
@@ -120,7 +120,7 @@ function attemptReconnect() {
     reconnectTimeout = setTimeout(async () => {
         reconnectTimeout = null;
         try {
-            await axios.post('/reissue', {}, { withCredentials: true });
+            await axios.post('/api/reissue', {}, { withCredentials: true });
             console.log('🔄 토큰 재발급 성공, WebSocket 재연결 시도...');
             connectWebSocket();
         } catch (err) {
