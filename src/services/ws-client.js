@@ -20,9 +20,10 @@ export async function connectWebSocket() {
         const accessToken = res;
         console.log("token 가지고 옴")
         console.log("cookie: " + accessToken)
-
+        const socket_api= api.defaults.baseURL;
+        console.log(socket_api);
         stompClient = new Client({
-            webSocketFactory: () => new SockJS('http://localhost:7070/api/ws-chat'), // 여기 중요
+            webSocketFactory: () => new SockJS(`${socket_api}/ws-chat`), // 여기 중요
             connectHeaders: {
                 Authorization: `Bearer ${accessToken}`, // 헤더에 붙임
             },
