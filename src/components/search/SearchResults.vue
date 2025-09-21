@@ -54,7 +54,11 @@ export default {
      fetchUser() {
       this.loading = true;
       try {
-        this.user = searchUserByKeyword(this.keyword);
+        this.user = searchUserByKeyword(
+            {
+          keyword: this.keyword
+        }
+        );
       } finally {
         this.loading = false;
       }
