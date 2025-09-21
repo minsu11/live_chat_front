@@ -26,15 +26,16 @@ export default defineConfig({
         port:8080,
         proxy: {
             '/api': {
-                target: 'http://localhost:7070',
+                target: 'https://chatalk.store',
                 changeOrigin: true,
+                secure:false,
             },
             '/auth':{
-                target: 'http://localhost:9090',
+                target: 'https://chatalk.store',
                 changeOrigin: true,
             },
             '/ws': {
-                target: 'http://localhost:7070',
+                target: 'https://chatalk.store',
                 changeOrigin: true,
                 ws: true,
                 secure: false,
