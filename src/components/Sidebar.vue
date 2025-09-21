@@ -4,9 +4,9 @@
 
     <div class="menu-buttons">
       <v-btn small rounded :color="currentView==='friends' ? '#4dabf7' : '#f1f3f5'"
-             class="menu-btn" @click="$emit('update-view', 'friends')">👥 친구</v-btn>
+             class="menu-btn" @click="$emit('changeView', 'friends')">👥 친구</v-btn>
       <v-btn small rounded :color="currentView==='chats' ? '#38d9a9' : '#f1f3f5'"
-             class="menu-btn" @click="$emit('update-view', 'chats')">💬 대화방</v-btn>
+             class="menu-btn" @click="$emit('changeView', 'chats')">💬 대화방</v-btn>
     </div>
 
     <div v-if="currentView === 'friends'" class="search-box">
@@ -31,11 +31,13 @@
     <div class="list-container">
       <FriendList
           v-if="currentView === 'friends' && !hasKw"
+          :friends="friends"
           :keyword="kw"
       @open-chat="$emit('open-chat', $event)"
       />
       <ChatList
           v-else-if="currentView === 'chats'"
+          :chats="chats"
           @open-chat="$emit('open-chat', $event)"
       />
     </div>
@@ -50,7 +52,10 @@ import api from '@/plugins/axios.js';
 export default {
   name: 'Sidebar',
   components: { ChatList, SearchResults },
-  props: { currentView: { type: String, default: 'friends' } },
+  props: { currentView: { type: String, default: 'friends' },
+    friends: { type: Array, default: () => [] },
+    chats: { type: Array, default: () => [] }
+  },
   data() {
     return { searchKeyword: '' };
   },
