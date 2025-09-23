@@ -27,6 +27,7 @@ api.interceptors.response.use(
         console.log("응답")
         const { status, message, data } = response.data;
         console.log("message : " + message);
+        console.log("status : " + status);
         if (status >= 200 && status < 300) {
             console.log("성공 처리")
             return data;

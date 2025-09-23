@@ -4,7 +4,6 @@
     <img :src="user.profile || defaultProfile" class="avatar" />
     <div class="info">
       <p class="name">{{ user.name }}</p>
-      <p class="id">ID: {{ user.id }}</p>
     </div>
 
     <div class="actions">
@@ -45,7 +44,7 @@ export default {
       if (this.sending) return;
       this.sending = true;
       try {
-        await requestFriend({ targetUserId: this.user.id });
+        await requestFriend({ targetUserId: this.user.userId });
         // 낙관적 업데이트: 요청됨 상태로 전환
         this.$emit('update-status', { id: this.user.id, status: 'PENDING' });
       } catch (e) {

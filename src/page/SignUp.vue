@@ -176,10 +176,11 @@ export default {
                 console.log("회원가입 성공")
                 alert('회원가입 성공');
                 this.$router.push("/")
-                alert
+
             });
       }
     },
+    // 중복 체크
     duplicate(inputId) {
       const id = this.$axios.post();
       return id.toString() === inputId

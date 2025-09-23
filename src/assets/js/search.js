@@ -16,13 +16,12 @@ export async function searchUserByKeyword({ keyword }) {
 
   controller = null;
 
-  // 공통 응답 포맷: { data: SearchUserResponse[] } 가정
 
-  return {
-    // 다양한 케이스 대응 (UUID/long/문자열)
-    userId: res.userId,
-    name: res.name,
-    profile: res.profileUrl ?? defaultProfile,
-    // 서버가 주면 더 좋음: NONE|PENDING|FRIENDS
-  };
+  // 공통 응답 포맷: { data: SearchUserResponse[] } 가정
+  if(!res || res.length === 0){
+    return [];
+  }
+  console.log(res.length);
+  console.log(res)
+  return res;
 }

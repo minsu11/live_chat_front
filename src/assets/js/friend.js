@@ -20,9 +20,12 @@ export async function requestFriend({ targetUserId }) {
   // 백엔드 엔드포인트에 맞게 하나 골라서 쓰기
   // 1) 바디로: POST /api/v1/friends/requests { targetUserId }
   // 2) 쿼리로: POST /api/v1/friends/requests?targetId=...
-  const res = await api.post('/v1/friends/register', { targetUserId }, {
+
+  console.log("targetUserId: ", targetUserId);
+  const res = await api.post('/v1/friends/register', { friendId: targetUserId }, {
     withCredentials: true,
   });
-  return res.data?.data ?? true;
+  console.log(res)
+  return res;
 }
 
