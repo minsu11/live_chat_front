@@ -44,6 +44,7 @@ export default {
         clearTimeout(this._debounceTimer);
         const k = (newK ?? '').trim();
         if (!k) {
+          // 친구 목록
           this.users = [];
           return;
         }

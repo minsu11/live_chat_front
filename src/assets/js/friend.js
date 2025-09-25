@@ -1,14 +1,19 @@
 // src/api/friends.js
 import api from '@/plugins/axios.js';
 
-export async function fetchFriends({ limit = 50, cursor = null } = {}) {
+// 친구를 불러오는 메서드
+export async function getFriends({ limit = 2, cursor = null } = {}) {
   const params = { limit };
   if (cursor) params.cursor = cursor;
 
-  const { data } = await api.get('/v1/friend', { params });
+  const res = await api.get('/v1/friends', { params });
+
+
   // 백엔드 ApiResponse<CursorPageResponse<...>> 가정:
   // { code, message, data: { items, next, hasNext } }
-  const payload = data?.data ?? data;
+  const payload = res.data ?? res; // data 래핑 여부 고려
+  console.log(res.next)
+  console.log("payload : ", payload);
   return {
     items: payload?.items ?? [],
     next: payload?.next ?? null,

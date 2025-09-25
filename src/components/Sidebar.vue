@@ -48,10 +48,11 @@
 import ChatList from '@/components/sidebar/ChatList.vue';
 import SearchResults from '@/components/search/SearchResults.vue';
 import api from '@/plugins/axios.js';
+import FriendList from "@/components/sidebar/FriendList.vue";
 
 export default {
   name: 'Sidebar',
-  components: { ChatList, SearchResults },
+  components: { ChatList, SearchResults , FriendList},
   props: { currentView: { type: String, default: 'friends' },
     friends: { type: Array, default: () => [] },
     chats: { type: Array, default: () => [] }
