@@ -3,11 +3,11 @@
     <h2 class="logo">ChatOn</h2>
 
     <!-- 내 프로필 -->
-    <div class="my-profile" @click="openProfile(me)">
-      <img :src="me?.profileUrl || defaultProfile" class="avatar" />
+    <div class="my-profile" @click="openMyProfile(me)">
+      <img :src="me?.profileUrl || defaultProfile" class="avatar"  alt=""/>
       <div class="info">
         <div class="name">{{ me?.name || '나' }}</div>
-        <div class="status">{{ me?.statusMessage || '상태 메시지를 입력하세요' }}</div>
+        <div class="status">{{ me?.statusMessage || '' }}</div>
       </div>
     </div>
 
@@ -77,7 +77,7 @@ export default {
     currentView: {type: String, default: 'friends'},
     friends: {type: Array, default: () => []},
     chats: {type: Array, default: () => []},
-    me: {type: Object, default: () => ({})}   // 내 프로필 정보
+    me: {type: Object, default: () => ({})}
   },
   data() {
     return {
@@ -113,11 +113,13 @@ export default {
       }
     },
     openProfile(user) {
-      // 본인의 데이터를 가지고 오는 api
-
+      this.selectedProfile = user;
+    },
+    openMyProfile(user) {
       this.selectedProfile = user;
     },
     closeProfile() {
+      console.log("profile close")
       this.selectedProfile = null;
     }
   }

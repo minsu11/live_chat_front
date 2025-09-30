@@ -1,5 +1,5 @@
 <template>
-  <div class="friend-card">
+  <div class="friend-card" @click="$emit('open-profile', friend)">
     <img :src="friend.profileUrl || defaultProfile" class="avatar" />
     <div class="info">
       <div class="name">{{ friend.name }}</div>

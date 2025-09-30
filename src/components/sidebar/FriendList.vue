@@ -10,6 +10,7 @@
           :key="friend.userId"
           :friend="friend"
           @remove="onRemoveFriend"
+          @open-profile="$emit('open-profile', $event)"
       />
     </div>
 

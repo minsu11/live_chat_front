@@ -6,6 +6,7 @@
           :current-view="currentView"
           :friends="friends"
           :chats="chats"
+          :me="me"
           @changeView="changeView"
           @openChat="openChat"
       />
@@ -29,7 +30,7 @@ import Sidebar from '@/components/Sidebar.vue';
 import ChatArea from '@/components/ChatArea.vue';
 import defaultProfile from '@/assets/default_image.png';
 import MenuDropdown from "@/components/MenuDropdown.vue";
-
+import api from "@/plugins/axios.js"
 export default {
   name: 'HomePage',
   components: { Sidebar, ChatArea , MenuDropdown},
@@ -37,17 +38,16 @@ export default {
     return {
       currentView: 'friends',
       defaultProfile,
-      friends: [
-        { name: '철수', profile: '' },
-        { name: '영희', profile: '' },
-      ],
-      chats: [
-        { title: '철수와의 대화', profile: 'https://example.com/chulsoo.png' },
-      ],
       selectedChat: '',
       messages: [],
       newMessage: '',
+      me: null // 내 프로필 상태
     };
+  },
+  async created(){
+    this.me = await api.get("v1/users/me/profile")
+    console.log(this.me)
+
   },
   methods: {
     changeView(view) {
