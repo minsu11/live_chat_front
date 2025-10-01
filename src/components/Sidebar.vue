@@ -3,7 +3,7 @@
     <h2 class="logo">ChatOn</h2>
 
     <!-- 내 프로필 -->
-    <div class="my-profile" @click="openMyProfile(me)">
+    <div class="my-profile" @click="openMyProfile()">
       <img :src="me?.profileUrl || defaultProfile" class="avatar"  alt=""/>
       <div class="info">
         <div class="name">{{ me?.name || '나' }}</div>
@@ -82,7 +82,8 @@ export default {
   data() {
     return {
       searchKeyword: '',
-      selectedProfile: null
+      selectedProfile: null,
+      defaultProfile
     };
   },
   computed: {
@@ -112,10 +113,15 @@ export default {
         this.$emit('toast', '친구 추가에 실패했어요 🥲');
       }
     },
-    openProfile(user) {
+    async openProfile(user) {
+      console.log(user.uuid);
+      const userId = user.uuid;
+      user = await api.get(`/v1/users/${userId}/profile/detail`)
+      console.log(user);
       this.selectedProfile = user;
     },
-    openMyProfile(user) {
+    async openMyProfile() {
+      const user = await api.get("/v1/users/me/profile/detail");
       this.selectedProfile = user;
     },
     closeProfile() {

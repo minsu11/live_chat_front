@@ -3,9 +3,10 @@
     <img :src="friend.profileUrl || defaultProfile" class="avatar" />
     <div class="info">
       <div class="name">{{ friend.name }}</div>
+<!--      <div class="message">{{ friend.name }}</div>-->
     </div>
     <div class="actions">
-      <button @click="$emit('remove', friend.id)">삭제</button>
+      <button @click="$emit('remove', friend.uuid)">삭제</button>
     </div>
   </div>
 </template>
