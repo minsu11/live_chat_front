@@ -46,6 +46,7 @@ export default {
   },
   async created(){
     this.me = await api.get("v1/users/me/profile/summary")
+
     console.log("create me")
     console.log(this.me)
 

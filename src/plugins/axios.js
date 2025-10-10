@@ -4,11 +4,14 @@ import router from "@/routers/index.js";
 
 const api = axios.create({
     baseURL: import.meta.env.VITE_API_BASE_URL,
-    headers: {
-        'Content-Type': 'application/json',
-    },
+    // headers: {
+    //     'Content-Type': 'application/json',
+    // },
     withCredentials: true, // 쿠키 자동 전송
 });
+
+// api.defaults.headers.post['Content-Type'] = 'application/json';
+// api.defaults.headers.put['Content-Type'] = 'application/json';
 
 let isRefreshing = false;
 let failedQueue = [];

@@ -6,7 +6,7 @@
     <div class="my-profile" @click="openMyProfile()">
       <img :src="me?.profileUrl || defaultProfile" class="avatar"  alt=""/>
       <div class="info">
-        <div class="name">{{ me?.name || '나' }}</div>
+        <div class="name">{{ me?.nickName || '나' }}</div>
         <div class="status">{{ me?.statusMessage || '' }}</div>
       </div>
     </div>
@@ -57,7 +57,9 @@
     <ProfileModal
         v-if="selectedProfile"
         :user="selectedProfile"
+        :is-me="selectedProfile?.isMe"
         @close="closeProfile"
+        @update-profile="handleUpdateProfile"
     />
   </aside>
 </template>
@@ -118,15 +120,41 @@ export default {
       const userId = user.uuid;
       user = await api.get(`/v1/users/${userId}/profile/detail`)
       console.log(user);
-      this.selectedProfile = user;
+      this.selectedProfile = { ...user, isMe:false};
     },
     async openMyProfile() {
       const user = await api.get("/v1/users/me/profile/detail");
-      this.selectedProfile = user;
+      this.selectedProfile = { ...user, isMe:true};
     },
     closeProfile() {
       console.log("profile close")
       this.selectedProfile = null;
+    },
+    async handleUpdateProfile({ name, message, file }){
+      console.log("update 기능")
+      try {
+        const formData = new FormData();
+
+        const profile = {};
+        if (name) profile.name = name;
+        if (message) profile.message = message;
+        console.log(file);
+        formData.append('profile',
+            new Blob([JSON.stringify(profile)], { type: 'application/json' }));
+        if (file instanceof File) formData.append('file', file);
+        console.log("api 쏘기 전")
+        const res = await api.put('/v1/users/me/profile', formData);
+
+        // 성공 후 프로필 재조회 or 로컬 상태 업데이트
+        console.log(res);
+        this.me.name = res.name || this.me.name;
+        this.me.message = res.message || this.me.message;
+        if (file) this.me.profileUrl = res.profileUrl;
+
+        this.showProfileModal = false;
+      } catch (err) {
+        console.error('프로필 수정 실패', err);
+      }
     }
   }
 };
