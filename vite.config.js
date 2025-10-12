@@ -41,7 +41,15 @@ export default defineConfig({
                 secure: false,
                 rewrite: (path) => path.replace(/^\/ws/, '/ws'), // 이 부분은 그대로지만 명시해두는 게 좋아
 
-            }
+            },
+          '/uploads': {
+            target: 'https://chatalk.store',
+            changeOrigin: true,
+            ws: true,
+            secure: false,
+            rewrite: (path) => path.replace(/^\/ws/, '/ws'), // 이 부분은 그대로지만 명시해두는 게 좋아
+
+          }
 
         }
     },
