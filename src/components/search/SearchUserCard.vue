@@ -1,7 +1,7 @@
 <!-- src/components/search/SearchUserCard.vue -->
 <template>
   <div class="card">
-    <img :src="user.profile || defaultProfile" class="avatar" />
+    <img :src="user.profileUrl || defaultProfile" class="avatar" />
     <div class="info">
       <p class="name">{{ user.name }}</p>
     </div>
