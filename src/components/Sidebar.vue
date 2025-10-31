@@ -120,6 +120,7 @@ export default {
       const userId = user.uuid;
       user = await api.get(`/v1/users/${userId}/profile/detail`)
       console.log(user);
+      user.uuid = userId;
       this.selectedProfile = { ...user, isMe:false};
     },
     async openMyProfile() {

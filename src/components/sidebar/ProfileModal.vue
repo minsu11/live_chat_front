@@ -18,6 +18,14 @@
           <button @click="isEditing = true">프로필 수정</button>
           <button @click="goToSettings">설정</button>
         </div>
+        <div class="actions" v-else>
+          <button class="btn-primary"
+                  :disabled="chatLoading"
+                  @click="startChat">
+            {{ chatLoading ? '연결 중…' : '대화하기' }}
+          </button>
+        </div>
+
       </div>
 
       <!-- 프로필 수정 모드 -->
@@ -68,7 +76,7 @@
 
 <script>
 import defaultProfile from '@/assets/default_image.png';
-
+import api from '@/plugins/axios.js'
 export default {
   name: 'ProfileModal',
   props: {
@@ -82,7 +90,8 @@ export default {
       editName: '',         // 닉네임 입력용
       editMessage: '',        // 수정 중인 상태 메시지
       previewUrl: null,        // 새 프로필 이미지 미리보기
-      selectedFile: null
+      selectedFile: null,
+      chatLoading: false
     };
   },
   mounted() {
@@ -123,7 +132,21 @@ export default {
         file: this.selectedFile
       });
       this.isEditing = false;
-    }
+    },
+    async startChat(){
+      const friendId = this.user.uuid;
+      if(!friendId){
+        alert("상대 식별자를 찾을 수 없습니다.")
+        return;
+      }
+      this.chatLoading = true;
+      const res = await api.get(`v1/chat-room/${friendId}/register`)
+
+      console.log("완료")
+      // 여기서 프로필을 닫고 채팅방
+      close()
+
+      },
   }
 };
 </script>
