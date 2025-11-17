@@ -1,6 +1,5 @@
 // HomePage.vue
 <template>
-  <v-app>
     <div class="chat-layout">
       <Sidebar
           :current-view="currentView"
@@ -10,30 +9,22 @@
           @changeView="changeView"
           @openChat="openChat"
       />
-      <ChatArea
-          :selected-chat="selectedChat"
-          :messages="messages"
-          v-model:newMessage="newMessage"
-          @sendMessage="sendMessage"
-      />
+
+      <router-view/>
 
       <!-- 점 세 개 버튼 + 메뉴 -->
       <MenuDropdown />
-
-
     </div>
-  </v-app>
 </template>
 
 <script>
 import Sidebar from '@/components/Sidebar.vue';
-import ChatArea from '@/components/ChatArea.vue';
 import defaultProfile from '@/assets/default_image.png';
 import MenuDropdown from "@/components/MenuDropdown.vue";
 import api from "@/plugins/axios.js"
 export default {
   name: 'HomePage',
-  components: { Sidebar, ChatArea , MenuDropdown},
+  components: { Sidebar, MenuDropdown},
   data() {
     return {
       currentView: 'friends',
@@ -55,15 +46,18 @@ export default {
     changeView(view) {
       this.currentView = view;
     },
-    openChat(item, type) {
-      // 채팅방 열기
-      if (type === 'friend') {
-        this.selectedChat = item.name;
-        this.messages = [`${item.name}님과 대화를 시작합니다.`];
-      } else if (type === 'chat') {
-        this.selectedChat = item.title;
-        this.messages = ['안녕!', '오랜만이야'];
-      }
+    async openChat(item, type) {
+      // DM이면 '방 보장(ensure)' API 호출 후 roomId 받아서 라우팅하는 패턴 권장
+      // const { data } = await api.post('/v1/chat-rooms/ensure', { friendUuid: item.uuid });
+      // const roomId = data.roomId;
+      console.log("open chat click")
+      console.log(item.type)
+      console.log(item)
+      console.log(item.title)
+      const roomId = item.id; // 목록에 이미 roomId가 있다면 그대로 사용
+      console.log(item.id)
+      if (!roomId) return;
+      this.$router.push({ name: 'chatRoom', params: { roomId } });
     },
     sendMessage() {
       if (!this.newMessage.trim()) return;
@@ -86,8 +80,10 @@ export default {
 
 <style scoped>
 .chat-layout {
-  display: flex;
-  height: 100vh;
+  /* App.vue의 <v-main> 안에서 100% 채우기 */
+  height: 100%;
+  display: grid;
+  grid-template-columns: 280px 1fr;
 }
 
 .menu-button {

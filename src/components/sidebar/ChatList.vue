@@ -82,8 +82,8 @@ export default {
 
 
         this.items = items.map((it) => ({
-          id: it.chatRoomId ?? it.id,
-          title: it.name ?? it.chatRoomName,
+          id: it.roomId ?? it.id,
+          title: it.name ?? it.roomName,
           profile: it.profileUrl ?? null,
           lastMessageAt: it.lastMessageAt ?? null,
           lastMessageAtDisplay: formatTime(it.lastMessageAt),

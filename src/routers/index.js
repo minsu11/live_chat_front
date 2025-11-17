@@ -11,8 +11,12 @@ const routes = [
     {
         path: '/home',
         name: 'HomePage',
-        component: () => import('@/page/Home.vue'),
+        component: () => import('@/components/layout/ShellLayout.vue'),
         meta: { requiresAuth: true }, // 로그인 필요
+        children: [
+            {path: '', name: 'homeEmpty', component:() => import('@/components/chat/EmptyPanel.vue')},
+            {path: 'rooms/:roomId?', name:'chatRoom', component: ()=>import('@/components/chat/ChatPanel.vue')}
+        ]
     },
     {
         path: '/admin/',
