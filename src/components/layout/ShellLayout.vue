@@ -46,16 +46,15 @@ export default {
     changeView(view) {
       this.currentView = view;
     },
-    async openChat(item, type) {
+    async openChat(payload) {
       // DM이면 '방 보장(ensure)' API 호출 후 roomId 받아서 라우팅하는 패턴 권장
       // const { data } = await api.post('/v1/chat-rooms/ensure', { friendUuid: item.uuid });
       // const roomId = data.roomId;
-      console.log("open chat click")
-      console.log(item.type)
-      console.log(item)
-      console.log(item.title)
-      const roomId = item.id; // 목록에 이미 roomId가 있다면 그대로 사용
-      console.log(item.id)
+      console.log("open chat start ");
+      console.log(payload.item)
+
+      const room = payload.item;
+      const roomId = room.id; // 목록에 이미 roomId가 있다면 그대로 사용
       if (!roomId) return;
       this.$router.push({ name: 'chatRoom', params: { roomId } });
     },

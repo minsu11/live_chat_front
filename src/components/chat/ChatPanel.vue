@@ -3,6 +3,8 @@
   <div class="panel">
     <header class="header">
       <div class="title">{{ roomTitle }}</div>
+
+
       <button class="icon" @click="$router.push({ name: 'homeEmpty' })">✕</button>
     </header>
 
@@ -23,6 +25,7 @@
 </template>
 
 <script>
+import Api from '@/plugins/axios.js'
 export default {
   name: 'ChatPanel',
   data() {
@@ -36,7 +39,11 @@ export default {
     async loadRoom(roomId) {
       if (!roomId) { this.roomTitle = ''; this.messages = []; return; }
       // 방 메타/히스토리 로드(API 연결로 교체)
-      this.roomTitle = `Room #${roomId}`;
+      // api 연결(room id get요청
+      const res = await Api.get(`v1/chat-room/${roomId}/summary`);
+      console.log(res)
+
+      this.roomTitle = `${roomId}`;
       this.messages = [];
       this.$nextTick(() => { const el = this.$refs.list; if (el) el.scrollTop = el.scrollHeight; });
 
