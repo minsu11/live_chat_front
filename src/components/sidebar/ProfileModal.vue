@@ -144,7 +144,9 @@ export default {
 
       console.log("완료")
       // 여기서 프로필을 닫고 채팅방
-      close()
+      this.close()
+      // 채팅방 목록을 보여주기?
+      // 그 담에 대화방이 나오게 하기.
 
       },
   }
