@@ -26,7 +26,7 @@ export default defineConfig({
         port:8080,
         proxy: {
             '/api': {
-                target: 'https://chatalk.store',
+                target: 'http://minsu11.java21.net',
                 changeOrigin: true,
                 secure:false,
             },
