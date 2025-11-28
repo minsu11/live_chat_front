@@ -31,11 +31,11 @@ export default defineConfig({
                 secure:false,
             },
             '/auth':{
-                target: 'https://chatalk.store',
+                target: 'http://minsu11.java21.net',
                 changeOrigin: true,
             },
-            '/ws': {
-                target: 'https://chatalk.store',
+            '/api/ws-chat': {
+                target: 'http://minsu11.java21.net',
                 changeOrigin: true,
                 ws: true,
                 secure: false,
@@ -43,7 +43,7 @@ export default defineConfig({
 
             },
           '/uploads': {
-            target: 'https://chatalk.store',
+              target: 'http://minsu11.java21.net',
             changeOrigin: true,
             ws: true,
             secure: false,
