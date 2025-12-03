@@ -134,23 +134,32 @@ export default {
     async handleUpdateProfile({ name, message, file }){
       console.log("update 기능")
       try {
-        const formData = new FormData();
+        if (this.me.nickName !== name || this.me.statusMessage !== message) {
+          const profile = {};
+          profile.name = name;
+          profile.message = message;
+          const res = await api.post('/v1/users/me/profile', profile);
+          console.log(res);
+          this.me.nickName = res.nickName;
+          this.me.statusMessage = res.message;
+          this.selectedProfile.nickName = res.nickName;
+          this.selectedProfile.message = res.message;
+        }
 
-        const profile = {};
-        if (name) profile.name = name;
-        if (message) profile.message = message;
-        console.log(file);
-        formData.append('profile',
-            new Blob([JSON.stringify(profile)], { type: 'application/json' }));
-        if (file instanceof File) formData.append('file', file);
-        console.log("api 쏘기 전")
-        const res = await api.put('/v1/users/me/profile', formData);
+        if (file instanceof File){
+          const formData = new FormData();
 
-        // 성공 후 프로필 재조회 or 로컬 상태 업데이트
-        console.log(res);
-        this.me.name = res.name || this.me.name;
-        this.me.message = res.message || this.me.message;
-        if (file) this.me.profileUrl = res.profileUrl;
+          formData.append('file', file);
+          console.log("api 쏘기 전")
+          const imageRes = await api.post('/v1/users/me/profile/image', formData,{
+            headers: {
+              'Content-Type': 'multipart/form-data',
+            }
+          });
+          console.log(imageRes);
+          this.me.profileUrl = imageRes.profileUrl;
+          this.selectedProfile.profileUrl = imageRes.profileUrl;
+        }
 
         this.showProfileModal = false;
       } catch (err) {
