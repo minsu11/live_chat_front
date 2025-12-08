@@ -44,9 +44,9 @@ export default {
       if (this.sending) return;
       this.sending = true;
       try {
-        await requestFriend({ targetUserId: this.user.userId });
+        await requestFriend({ targetUserId: this.user.uuid });
         // 낙관적 업데이트: 요청됨 상태로 전환
-        this.$emit('update-status', { id: this.user.id, status: 'PENDING' });
+        this.$emit('update-status', { id: this.user.uuid, status: 'PENDING' });
       } catch (e) {
         console.error(e);
         alert('친구 요청에 실패했습니다.');

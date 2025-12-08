@@ -56,7 +56,8 @@ export default {
     async fetchUser() {
       this.loading = true;
       try {
-        this.users = await searchUserByKeyword({keyword: this.keyword});
+        const result = await searchUserByKeyword({keyword: this.keyword});
+        this.users = result ? [result] : [];
       } finally {
         this.loading = false;
       }

@@ -21,7 +21,6 @@ export async function searchUserByKeyword({ keyword }) {
   if(!res || res.length === 0){
     return [];
   }
-  console.log(res.length);
   console.log(res)
   return res;
 }

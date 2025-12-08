@@ -34,6 +34,12 @@ export default defineConfig({
                 target: 'http://minsu11.java21.net',
                 changeOrigin: true,
             },
+            '/api/ws': {
+                target: 'http://minsu11.java21.net',
+                changeOrigin: true,
+                ws: true,
+                secure: false,
+            },
             '/ap[/ws-chat': {
                 target: 'http://minsu11.java21.net',
                 changeOrigin: true,
