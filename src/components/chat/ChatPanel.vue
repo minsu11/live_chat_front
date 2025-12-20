@@ -41,9 +41,10 @@ export default {
       // 방 메타/히스토리 로드(API 연결로 교체)
       // api 연결(room id get요청
       const res = await Api.get(`v1/chat-room/${roomId}/summary`);
+      console.log("응답 완");
       console.log(res)
 
-      this.roomTitle = `${roomId}`;
+      this.roomTitle = res.title;
       this.messages = [];
       this.$nextTick(() => { const el = this.$refs.list; if (el) el.scrollTop = el.scrollHeight; });
 
