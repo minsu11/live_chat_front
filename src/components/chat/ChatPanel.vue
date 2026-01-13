@@ -25,11 +25,12 @@
 </template>
 
 <script>
-import Api from '@/plugins/axios.js'
+import Api from '@/plugins/axios.js';
+import {subscribe, sendMessage} from '@/services/ws-client.js';
 export default {
   name: 'ChatPanel',
   data() {
-    return { roomTitle: '', messages: [], draft: '', unsub: null };
+    return { roomTitle: '', messages: [], draft: '', unsub: null, roomId: '' };
   },
   async mounted() { await this.loadRoom(this.$route.params.roomId); },
   watch: {
@@ -43,7 +44,7 @@ export default {
       const res = await Api.get(`v1/chat-room/${roomId}/summary`);
       console.log("응답 완");
       console.log(res)
-
+      this.roomId = roomId;
       this.roomTitle = res.title;
       this.messages = [];
       this.$nextTick(() => { const el = this.$refs.list; if (el) el.scrollTop = el.scrollHeight; });
@@ -52,7 +53,16 @@ export default {
       // this.unsub?.(); this.unsub = subscribe(roomId, (msg)=>{ this.messages.push(msg); ... });
     },
     send() {
+      // message type 분류를 여기서 해야함
       const text = this.draft.trim(); if (!text) return;
+      console.log(Number(this.roomId))
+      sendMessage('/pub/chat/message',
+          {
+            roomId : Number(this.roomId),
+            messageType: '개인',
+            text: text,
+
+          })
       // await api.post(`/v1/chat-rooms/${this.$route.params.roomId}/messages`, { text })
       this.messages.push({ id: Date.now(), text, at: new Date().toISOString(), mine: true });
       this.draft = '';

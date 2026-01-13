@@ -75,7 +75,9 @@ export function subscribe(destination, callback) {
 
 export function sendMessage(destination, payload) {
     if (stompClient && stompClient.connected) {
+        console.log("send message start");
         stompClient.publish({ destination, body: JSON.stringify(payload) });
+        console.log("send message end");
     } else {
         console.warn('⚠️ WebSocket이 연결되어 있지 않습니다.');
     }
