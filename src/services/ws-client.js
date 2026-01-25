@@ -30,7 +30,7 @@ export async function connectWebSocket() {
             reconnectDelay: 0,
             onConnect: () => {
                 console.log('✅ WebSocket connected');
-
+                // 끊겼다가 다시 붙었을 떄 기존 구독 복원
                 // reconnectSubscriptions();
             },
             onStompError: (frame) => {

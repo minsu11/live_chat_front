@@ -50,6 +50,7 @@ export default {
       this.$nextTick(() => { const el = this.$refs.list; if (el) el.scrollTop = el.scrollHeight; });
 
       // 실시간 구독 연결/해제 지점
+      // todo 구독 및 취소 부분 구현
       // this.unsub?.(); this.unsub = subscribe(roomId, (msg)=>{ this.messages.push(msg); ... });
     },
     send() {
