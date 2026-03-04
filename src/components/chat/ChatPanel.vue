@@ -53,7 +53,7 @@ export default {
       // todo 구독 및 취소 부분 구현
       // this.unsub?.(); this.unsub = subscribe(roomId, (msg)=>{ this.messages.push(msg); ... });
     },
-    send() {n
+    send() {
       // message type 분류를 여기서 해야함
       const text = this.draft.trim(); if (!text) return;
       console.log(Number(this.roomId))
