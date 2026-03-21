@@ -1,0 +1,48 @@
+.signup-box {
+    max-width: 500px;
+}
+
+.inline-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+}
+
+.inline-row .grow {
+    flex: 1;
+}
+
+.inline-row .v-btn {
+    min-width: 100px;
+    height: 40px;
+    margin-top: 2px;
+}
+
+.date-field {
+    width: 100%;
+}
+
+.date-label {
+    display: block;
+    font-size: 14px;
+    color: #555;
+    margin-bottom: 8px;
+    font-weight: 500;
+}
+
+/* 회원가입은 필드가 많아서 간격 조금 더 촘촘하게 */
+.signup-form .v-input,
+.signup-form .date-field {
+    margin-bottom: 12px;
+}
+
+@media (max-width: 600px) {
+    .inline-row {
+        flex-direction: column;
+    }
+
+    .inline-row .v-btn {
+        width: 100%;
+        margin-top: 0;
+    }
+}

@@ -1,116 +1,103 @@
 <template>
-  <v-app>
-    <div class="login-wrapper">
-      <!-- 왼쪽 브랜드 패널 -->
-      <div class="left-panel">
-        <h1 class="title">ChatOn</h1>
-        <p class="subtitle">실시간 대화의 시작<br />지금 바로 연결하세요.</p>
-        <div class="bubbles">
-          <div class="bubble bubble-1"></div>
-          <div class="bubble bubble-2"></div>
-          <div class="bubble bubble-3"></div>
-        </div>
-      </div>
+  <AuthLayout title="로그인">
+    <v-form>
+      <v-text-field
+          v-model="userId"
+          label="아이디"
+          dense
+          outlined
+          hide-details
+          class="mb-4"
+      />
+      <v-text-field
+          v-model="password"
+          label="비밀번호"
+          type="password"
+          dense
+          outlined
+          hide-details
+          class="mb-4"
+      />
+      <v-btn block color="primary" class="mb-4" @click="login">
+        로그인
+      </v-btn>
+    </v-form>
 
-      <!-- 오른쪽 로그인 박스 -->
-      <div class="right-panel">
-        <div class="form-box">
-          <h2>로그인</h2>
-          <v-form>
-            <v-text-field
-                v-model="userId"
-                label="아이디"
-                dense
-                outlined
-                hide-details
-                class="mb-4"
-            />
-            <v-text-field
-                v-model="password"
-                label="비밀번호"
-                type="password"
-                dense
-                outlined
-                hide-details
-                class="mb-4"
-            />
-            <v-btn block color="primary" class="mb-4" @click="login">
-              로그인
-            </v-btn>
-          </v-form>
+    <div class="divider">또는</div>
 
-          <div class="divider">또는</div>
+    <div class="social-buttons">
+      <v-btn block class="google mb-2" elevation="1">
+        <img
+            src="https://developers.google.com/identity/images/g-logo.png"
+            alt="Google Logo"
+            width="20"
+            height="20"
+            class="mr-2"
+        />
+        Google 로그인
+      </v-btn>
 
-          <div class="social-buttons">
-            <v-btn block class="google mb-2" elevation="1">
-              <img
-                  src="https://developers.google.com/identity/images/g-logo.png"
-                  alt="Google Logo"
-                  width="20"
-                  height="20"
-                  class="mr-2"
-              />
-              Google 로그인
-            </v-btn>
-            <v-btn block color="#FEE500" class="kakao" dark elevation="1">
-              <img
-                  src="@/assets/kakao.png"
-                  alt="Kakao Logo"
-                  width="20"
-                  height="20"
-                  class="mr-2"
-              />
-              Kakao 로그인
-            </v-btn>
-          </div>
-
-          <p class="signup">
-            계정이 없으신가요? <a href="/sign-up">회원가입 →</a>
-          </p>
-        </div>
-      </div>
+      <v-btn block color="#FEE500" class="kakao" dark elevation="1">
+        <img
+            src="@/assets/kakao.png"
+            alt="Kakao Logo"
+            width="20"
+            height="20"
+            class="mr-2"
+        />
+        Kakao 로그인
+      </v-btn>
     </div>
-  </v-app>
+
+    <p class="signup">
+      계정이 없으신가요? <router-link to="/sign-up">회원가입 →</router-link>
+    </p>
+  </AuthLayout>
 </template>
 
 <script>
 import api from '@/plugins/axios.js'
-import { connectWebSocket } from '@/services/ws-client.js' // 추가
-import '@/assets/css/chat-login.css'
+import { connectWebSocket } from '@/services/ws-client.js'
+import AuthLayout from '@/components/layout/AuthLayout.vue'
+import '@/assets/css/auth-login.css'
 
 export default {
   name: 'ChatLogin',
+  components: {
+    AuthLayout
+  },
   data() {
     return {
       userId: '',
       password: '',
-    };
+    }
   },
   methods: {
     async login() {
-      console.log("login request")
-      try{
-        const res = await api.post('/v1/users/login', {
+      console.log('login request')
+
+      try {
+        await api.post('/v1/users/login', {
           userId: this.userId,
           password: this.password
         })
 
-        console.log("login success")
-        await new Promise(resolve => setTimeout(resolve, 50)); // 쿠키 저장 시간 확보
-        this.$cookies.set('loginDummy','test', 'test');
+        console.log('login success')
 
-        console.log("web socket connect")
-        connectWebSocket();
+        await new Promise(resolve => setTimeout(resolve, 50))
+        this.$cookies.set('loginDummy', 'test', 'test')
 
-        this.$router.push('/home');
-      }catch(e){
-       console.log("login cathch 문 ")
+        console.log('web socket connect')
+        connectWebSocket()
+
+        this.$router.push('/home')
+      } catch (e) {
+        console.log('login catch', e)
       }
     },
   },
-};
+}
 </script>
 
 <style scoped>
-
 </style>

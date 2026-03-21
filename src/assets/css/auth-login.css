@@ -1,0 +1,161 @@
+.auth-wrapper {
+    display: flex;
+    min-height: 100vh;
+    background: #f7f7f7;
+}
+
+.left-panel {
+    flex: 1;
+    background: #eaf4ff;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: 0 120px;
+    position: relative;
+}
+
+.title {
+    font-size: 56px;
+    font-weight: 800;
+    color: #1d1d1f;
+    margin-bottom: 20px;
+    line-height: 1.1;
+}
+
+.subtitle {
+    font-size: 22px;
+    line-height: 1.7;
+    color: #1d1d1f;
+    font-weight: 500;
+}
+
+.bubbles {
+    position: absolute;
+    bottom: 34px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 10px;
+}
+
+.bubble {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: #8ec0f4;
+    opacity: 0.45;
+}
+
+.bubble-1 {
+    opacity: 1;
+}
+
+.right-panel {
+    flex: 1;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 24px;
+    background: #f7f7f7;
+}
+
+.form-box {
+    width: 100%;
+    max-width: 420px;
+    background: #ffffff;
+    border-radius: 14px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+    padding: 34px 30px 28px;
+}
+
+.form-box h2 {
+    text-align: center;
+    font-size: 22px;
+    font-weight: 800;
+    color: #1d1d1f;
+    margin-bottom: 24px;
+}
+
+.auth-link-text,
+.signup {
+    text-align: center;
+    font-size: 14px;
+    color: #666;
+    margin-top: 16px;
+}
+
+.auth-link-text a,
+.signup a {
+    color: #1976d2;
+    text-decoration: none;
+    font-weight: 600;
+}
+
+.auth-link-text a:hover,
+.signup a:hover {
+    text-decoration: underline;
+}
+
+.auth-scroll-box {
+    max-width: 500px;
+    max-height: 88vh;
+    overflow-y: auto;
+}
+
+.auth-scroll-box::-webkit-scrollbar {
+    width: 8px;
+}
+
+.auth-scroll-box::-webkit-scrollbar-thumb {
+    background: rgba(0, 0, 0, 0.16);
+    border-radius: 999px;
+}
+
+/* Vuetify input 공통 톤 */
+.form-box .v-text-field--outlined fieldset,
+.form-box .v-select--outlined fieldset {
+    border-color: #d9d9d9;
+}
+
+.form-box .v-input__slot {
+    border-radius: 8px;
+}
+
+.form-box .v-btn {
+    text-transform: none;
+    font-weight: 700;
+    letter-spacing: 0;
+    border-radius: 8px;
+}
+
+/* 모바일 */
+@media (max-width: 960px) {
+    .auth-wrapper {
+        flex-direction: column;
+    }
+
+    .left-panel {
+        display: none;
+    }
+
+    .right-panel {
+        min-height: 100vh;
+        padding: 20px;
+    }
+
+    .form-box,
+    .auth-scroll-box {
+        max-width: 100%;
+    }
+}
+
+@media (max-width: 600px) {
+    .form-box {
+        padding: 26px 18px 22px;
+        border-radius: 12px;
+    }
+
+    .form-box h2 {
+        font-size: 20px;
+    }
+}

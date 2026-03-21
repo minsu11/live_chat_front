@@ -1,137 +1,140 @@
 <template>
-  <main-header>
-    <MainHeader></MainHeader>
-  </main-header>
-  <v-app>
-    <v-container>
-      <v-card class="mx-auto pa-5" max-width="500">
-        <v-card-title class="text-h5 font-weight-bold">회원가입</v-card-title>
-        <v-card-text>
-          <v-form v-model="valid">
-            <v-row>
-              <v-col cols="12" class="pb-0">
-                <v-text-field
-                    v-model="id"
-                    :rules="[rules.required, rules.id]"
-                    label="아이디"
-                    required
-                    outlined
-                    dense
-                ></v-text-field>
-              </v-col>
-              <v-col cols="12" class="py-0">
-                <v-btn small color="primary" @click="duplicate(id)">중복 확인</v-btn>
-              </v-col>
-              <v-col cols="12">
-                <v-text-field
-                    v-model="password"
-                    :rules="[rules.required, rules.password]"
-                    label="비밀번호"
-                    type="password"
-                    required
-                    outlined
-                    dense
-                ></v-text-field>
-              </v-col>
-              <v-col cols="12">
-                <v-text-field
-                    v-model="name"
-                    :rules="[rules.required]"
-                    label="이름"
-                    required
-                    outlined
-                    dense
-                ></v-text-field>
-              </v-col>
-              <v-col cols="12">
-                <v-text-field
-                    v-model="nickName"
-                    :rules="[rules.required]"
-                    label="닉네임"
-                    required
-                    outlined
-                    dense
-                ></v-text-field>
-              </v-col>
-              <v-col cols="12">
-                <v-select
-                    v-model="gender"
-                    :items="['남자', '여자']"
-                    label="성별"
-                    required
-                    outlined
-                    dense
-                ></v-select>
-              </v-col>
-              <v-col cols="12">
-                <v-text-field
-                    v-model="age"
-                    :rules="[rules.required]"
-                    label="나이"
-                    required
-                    outlined
-                    dense
-                    type="number"
-                    min="1"
-                ></v-text-field>
-              </v-col>
-              <v-col cols="12">
-                <p class="mb-2 font-weight-medium">생일</p>
-                <VueDatePicker
-                    v-model="birth"
-                    locale="ko"
-                    :enable-time-picker="false"
-                    max-date="today"
-                    type="date"
-                    style="width: 100%;"
-                />
-              </v-col>
-              <v-col cols="12">
-                <v-text-field
-                    v-model="email"
-                    :rules="[rules.required, rules.email]"
-                    label="이메일"
-                    required
-                    outlined
-                    dense
-                ></v-text-field>
-              </v-col>
-              <v-col cols="12">
-                <v-text-field
-                    v-model="phoneNumber"
-                    :rules="[rules.required]"
-                    label="전화번호"
-                    required
-                    outlined
-                    dense
-                ></v-text-field>
-              </v-col>
-              <v-col cols="12" class="text-center">
-                <v-btn
-                    :disabled="!valid"
-                    color="primary"
-                    @click="submitForm"
-                >
-                  회원가입
-                </v-btn>
-              </v-col>
-            </v-row>
-          </v-form>
-        </v-card-text>
-      </v-card>
-    </v-container>
-  </v-app>
+  <AuthLayout title="회원가입" boxClass="auth-scroll-box signup-box">
+    <v-form v-model="valid" class="signup-form">
+      <div class="inline-row mb-3">
+        <div class="grow">
+          <v-text-field
+              v-model="id"
+              :rules="[rules.required, rules.id]"
+              label="아이디"
+              required
+              outlined
+              dense
+              hide-details="auto"
+          />
+        </div>
+
+        <v-btn color="primary" @click="duplicate(id)">
+          중복 확인
+        </v-btn>
+      </div>
+
+      <v-text-field
+          v-model="password"
+          :rules="[rules.required, rules.password]"
+          label="비밀번호"
+          type="password"
+          required
+          outlined
+          dense
+          class="mb-3"
+      />
+
+      <v-text-field
+          v-model="name"
+          :rules="[rules.required]"
+          label="이름"
+          required
+          outlined
+          dense
+          class="mb-3"
+      />
+
+      <v-text-field
+          v-model="nickName"
+          :rules="[rules.required]"
+          label="닉네임"
+          required
+          outlined
+          dense
+          class="mb-3"
+      />
+
+      <v-select
+          v-model="gender"
+          :items="['남자', '여자']"
+          label="성별"
+          :rules="[rules.required]"
+          required
+          outlined
+          dense
+          class="mb-3"
+      />
+
+      <v-text-field
+          v-model="age"
+          :rules="[rules.required]"
+          label="나이"
+          required
+          outlined
+          dense
+          type="number"
+          min="1"
+          class="mb-3"
+      />
+
+      <div class="date-field mb-4">
+        <label class="date-label">생일</label>
+        <VueDatePicker
+            v-model="birth"
+            locale="ko"
+            :enable-time-picker="false"
+            max-date="today"
+            type="date"
+            style="width: 100%;"
+        />
+      </div>
+
+      <v-text-field
+          v-model="email"
+          :rules="[rules.required, rules.email]"
+          label="이메일"
+          required
+          outlined
+          dense
+          class="mb-3"
+      />
+
+      <v-text-field
+          v-model="phoneNumber"
+          :rules="[rules.required, rules.phoneNumber]"
+          label="전화번호"
+          required
+          outlined
+          dense
+          class="mb-4"
+      />
+
+      <v-btn
+          :disabled="!valid"
+          color="primary"
+          block
+          class="mb-4"
+          @click="submitForm"
+      >
+        회원가입
+      </v-btn>
+    </v-form>
+
+    <p class="auth-link-text">
+      이미 계정이 있으신가요? <router-link to="/">로그인 →</router-link>
+    </p>
+  </AuthLayout>
 </template>
 
 <script>
-import MainHeader from "@/components/MainHeader.vue";
-import moment from 'moment';
-import api from "@/plugins/axios.js";
+import moment from 'moment'
+import api from '@/plugins/axios.js'
+import AuthLayout from '@/components/layout/AuthLayout.vue'
+import '@/assets/css/auth-signup.css'
 
-const HOST = "";
+const HOST = ''
+
 export default {
-  name: "signUp",
-  components: {MainHeader},
+  name: 'SignUp',
+  components: {
+    AuthLayout
+  },
   data() {
     return {
       valid: false,
@@ -146,52 +149,51 @@ export default {
       age: '',
       rules: {
         required: value => !!value || '필수 항목입니다.',
-        id: value => value.length >= 5 || '5자 이상이여야합니다.',
+        id: value => (value && value.length >= 5) || '5자 이상이여야합니다.',
         email: value => /.+@.+\..+/.test(value) || '유효한 이메일을 입력해주세요.',
         phoneNumber: value => /010[0-9]{7,8}/.test(value) || '유효한 전화 번호를 입력해주세요',
-        password: value => value.length >= 6 || '비밀번호는 6자 이상이어야 합니다.'
+        password: value => (value && value.length >= 6) || '비밀번호는 6자 이상이어야 합니다.'
       }
     }
   },
   methods: {
     submitForm() {
-      if (this.valid) {
-        const date = moment(this.birth).format('YYYY-MM-DD');
-        const signData = {
-          id: this.id,
-          password: this.password,
-          name: this.name,
-          email: this.email,
-          phoneNumber: this.phoneNumber,
-          nickName: this.nickName,
-          birth: date,
-          gender: this.gender,
-          age: this.age
-        };
-
-        api.post(HOST + "/v1/users/register", signData)
-            .then((res) => {
-              console.log("response")
-              console.log(res)
-                console.log("회원가입 성공")
-                alert('회원가입 성공');
-                this.$router.push("/")
-
-            });
+      if (!this.valid) {
+        return
       }
+
+      const date = moment(this.birth).format('YYYY-MM-DD')
+
+      const signData = {
+        id: this.id,
+        password: this.password,
+        name: this.name,
+        email: this.email,
+        phoneNumber: this.phoneNumber,
+        nickName: this.nickName,
+        birth: date,
+        gender: this.gender,
+        age: this.age
+      }
+
+      api.post(HOST + '/v1/users/register', signData)
+          .then((res) => {
+            console.log('response', res)
+            alert('회원가입 성공')
+            this.$router.push('/')
+          })
+          .catch((e) => {
+            console.log('회원가입 실패', e)
+          })
     },
-    // 중복 체크
+
     duplicate(inputId) {
-      const id = this.$axios.post();
-      return id.toString() === inputId
+      console.log('중복 체크 대상:', inputId)
+      // TODO: 실제 중복 확인 API 연결
     }
   }
-};
+}
 </script>
 
 <style scoped>
-v-container {
-  margin-top: 25px;
-  margin-bottom: 25px;
-}
 </style>
