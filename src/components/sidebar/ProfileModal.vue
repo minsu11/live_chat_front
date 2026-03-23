@@ -37,7 +37,7 @@
               :src="previewUrl || user.profileUrl || defaultProfile"
               class="avatar-large clickable"
               @click="triggerFileSelect"
-          />
+           alt=""/>
           <input
               ref="fileInput"
               type="file"
@@ -76,7 +76,7 @@
 
 <script>
 import defaultProfile from '@/assets/default_image.png';
-import api from '@/plugins/axios.js'
+import { startDirectChat } from '@/assets/js/chat-navigation.js';
 export default {
   name: 'ProfileModal',
   props: {
@@ -133,22 +133,25 @@ export default {
       });
       this.isEditing = false;
     },
-    async startChat(){
-      const friendId = this.user.uuid;
-      if(!friendId){
-        alert("상대 식별자를 찾을 수 없습니다.")
+    async startChat() {
+      const friendUuid = this.user?.uuid;
+
+      if (!friendUuid) {
+        alert('상대 식별자를 찾을 수 없습니다.');
         return;
       }
-      this.chatLoading = true;
-      const res = await api.get(`v1/chat-room/${friendId}/register`)
 
-      console.log("완료")
-      // 여기서 프로필을 닫고 채팅방
-      this.close()
-      // 채팅방 목록을 보여주기?
-      // 그 담에 대화방이 나오게 하기.
-
-      },
+      try {
+        this.chatLoading = true;
+        await startDirectChat(this.$router, friendUuid);
+        this.close();
+      } catch (e) {
+        console.error(e);
+        alert('채팅방을 여는 중 오류가 발생했습니다.');
+      } finally {
+        this.chatLoading = false;
+      }
+    },
   }
 };
 </script>

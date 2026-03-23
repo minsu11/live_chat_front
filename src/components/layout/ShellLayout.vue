@@ -22,6 +22,8 @@ import Sidebar from '@/components/Sidebar.vue';
 import defaultProfile from '@/assets/default_image.png';
 import MenuDropdown from "@/components/MenuDropdown.vue";
 import api from "@/plugins/axios.js"
+import { openExistingChat } from '@/assets/js/chat-navigation.js';
+
 export default {
   name: 'HomePage',
   components: { Sidebar, MenuDropdown},
@@ -50,13 +52,20 @@ export default {
       // DM이면 '방 보장(ensure)' API 호출 후 roomId 받아서 라우팅하는 패턴 권장
       // const { data } = await api.post('/v1/chat-rooms/ensure', { friendUuid: item.uuid });
       // const roomId = data.roomId;
-      console.log("open chat start ");
-      console.log(payload.item)
+      try {
+        const room = payload?.item;
+        const roomId = room?.id;
 
-      const room = payload.item;
-      const roomId = room.id; // 목록에 이미 roomId가 있다면 그대로 사용
-      if (!roomId) return;
-      this.$router.push({ name: 'chatRoom', params: { roomId } });
+        if (!roomId) {
+          alert('채팅방 정보가 없습니다.');
+          return;
+        }
+
+        await openExistingChat(this.$router, roomId);
+      } catch (e) {
+        console.error(e);
+        alert('채팅방 이동 중 오류가 발생했습니다.');
+      }
     },
     sendMessage() {
       if (!this.newMessage.trim()) return;

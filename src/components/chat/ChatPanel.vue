@@ -3,13 +3,19 @@
   <div class="panel">
     <header class="header">
       <div class="title">{{ roomTitle }}</div>
-
-
       <button class="icon" @click="$router.push({ name: 'homeEmpty' })">✕</button>
     </header>
 
     <section class="messages" ref="list">
-      <div v-for="m in messages" :key="m.id" class="msg" :class="{ mine: m.mine }">
+      <div v-if="loading" class="empty">불러오는 중...</div>
+      <div v-else-if="messages.length === 0" class="empty">아직 메시지가 없습니다.</div>
+
+      <div
+          v-for="m in messages"
+          :key="m.id"
+          class="msg"
+          :class="{ mine: m.mine }"
+      >
         <div class="bubble">
           <div class="text">{{ m.text }}</div>
           <div class="meta">{{ format(m.at) }}</div>
@@ -18,7 +24,12 @@
     </section>
 
     <footer class="composer">
-      <input v-model="draft" class="input" placeholder="메시지를 입력하세요" @keyup.enter="send" />
+      <input
+          v-model="draft"
+          class="input"
+          placeholder="메시지를 입력하세요"
+          @keyup.enter="send"
+      />
       <button class="send" :disabled="!draft.trim()" @click="send">전송</button>
     </footer>
   </div>
@@ -26,52 +37,147 @@
 
 <script>
 import Api from '@/plugins/axios.js';
-import {subscribe, sendMessage} from '@/services/ws-client.js';
+import { connectWebSocket, subscribe, sendMessage } from '@/services/ws-client.js';
+
 export default {
   name: 'ChatPanel',
   data() {
-    return { roomTitle: '', messages: [], draft: '', unsub: null, roomId: '' };
+    return {
+      roomTitle: '',
+      messages: [],
+      draft: '',
+      unsub: null,
+      roomId: '',
+      loading: false,
+      me: null,
+    };
   },
-  async mounted() { await this.loadRoom(this.$route.params.roomId); },
+
+  async mounted() {
+    await this.loadMe();
+    await this.loadRoom(this.$route.params.roomId);
+  },
+  computed: {
+    currentRoomId() {
+      return this.$route.params.roomId;
+    },
+  },
   watch: {
-    '$route.params.roomId': { async handler(nextId) { await this.loadRoom(nextId); } },
+    async currentRoomId(nextId) {
+      await this.loadRoom(nextId);
+    },
   },
+
   methods: {
+    async loadMe() {
+      try {
+        const res = await Api.get('/v1/users/me/profile/summary');
+        this.me = res.data;
+      } catch (e) {
+        console.error('내 정보 조회 실패', e);
+      }
+    },
+
     async loadRoom(roomId) {
-      if (!roomId) { this.roomTitle = ''; this.messages = []; return; }
-      // 방 메타/히스토리 로드(API 연결로 교체)
-      // api 연결(room id get요청
-      const res = await Api.get(`v1/chat-room/${roomId}/summary`);
-      console.log("응답 완");
-      console.log(res)
-      this.roomId = roomId;
-      this.roomTitle = res.title;
-      this.messages = [];
-      this.$nextTick(() => { const el = this.$refs.list; if (el) el.scrollTop = el.scrollHeight; });
+      if (!roomId) {
+        this.roomTitle = '';
+        this.messages = [];
+        this.roomId = '';
+        this.cleanupSubscription();
+        return;
+      }
 
-      // 실시간 구독 연결/해제 지점
-      // todo 구독 및 취소 부분 구현
-      // this.unsub?.(); this.unsub = subscribe(roomId, (msg)=>{ this.messages.push(msg); ... });
+      try {
+        this.loading = true;
+        this.roomId = String(roomId);
+
+        this.cleanupSubscription();
+
+        const res = await Api.get(`/v1/chat-room/${roomId}/enter`);
+
+        this.roomTitle = res?.title ?? '채팅방';
+
+        this.messages = (res?.messages ?? []).map((m) => ({
+          id: m.id,
+          text: m.messageContent ?? m.text ?? '',
+          at: m.createdAt ?? m.at ?? new Date().toISOString(),
+          mine: Number(m.senderId) === Number(this.me?.id),
+        }));
+        console.log(this.roomTitle);
+
+        await this.$nextTick();
+        this.scrollToBottom();
+
+        await connectWebSocket();
+        // todo 임시 주석 차단
+        // this.unsub = subscribe(`/sub/chat/rooms/${roomId}`, (msg) => {
+        //   this.messages.push({
+        //     id: msg.id ?? Date.now(),
+        //     text: msg.messageContent ?? msg.text ?? '',
+        //     at: msg.createdAt ?? new Date().toISOString(),
+        //     mine: Number(msg.senderId) === Number(this.me?.id),
+        //   });
+        //
+        //   this.$nextTick(() => this.scrollToBottom());
+        // });
+      } catch (e) {
+        console.error('채팅방 로드 실패', e);
+        this.roomTitle = '';
+        this.messages = [];
+      } finally {
+        this.loading = false;
+      }
     },
+
     send() {
-      // message type 분류를 여기서 해야함
-      const text = this.draft.trim(); if (!text) return;
-      console.log(Number(this.roomId))
-      sendMessage('/pub/chat/message',
-          {
-            roomId : Number(this.roomId),
-            messageType: '개인',
-            text: text,
+      const text = this.draft.trim();
+      if (!text || !this.roomId) return;
 
-          })
-      // await api.post(`/v1/chat-rooms/${this.$route.params.roomId}/messages`, { text })
-      this.messages.push({ id: Date.now(), text, at: new Date().toISOString(), mine: true });
+      sendMessage('/pub/chat/message', {
+        roomId: Number(this.roomId),
+        messageType: 'TALK',
+        messageContent: text,
+      });
+
+      this.messages.push({
+        id: Date.now(),
+        text,
+        at: new Date().toISOString(),
+        mine: true,
+      });
+
       this.draft = '';
-      this.$nextTick(() => { const el = this.$refs.list; if (el) el.scrollTop = el.scrollHeight; });
+      this.$nextTick(() => this.scrollToBottom());
     },
-    format(iso) { const d = new Date(iso); return Number.isNaN(d) ? '' : d.toLocaleString(); },
+
+    cleanupSubscription() {
+      if (!this.unsub) return;
+
+      if (typeof this.unsub === 'function') {
+        this.unsub();
+      } else if (typeof this.unsub.unsubscribe === 'function') {
+        this.unsub.unsubscribe();
+      }
+
+      this.unsub = null;
+    },
+
+    scrollToBottom() {
+      const el = this.$refs.list;
+      if (el) {
+        el.scrollTop = el.scrollHeight;
+      }
+    },
+
+    format(iso) {
+      const d = new Date(iso);
+      return Number.isNaN(d) ? '' : d.toLocaleString();
+    },
   },
-  beforeUnmount() { if (this.unsub) this.unsub(); },
+
+  beforeUnmount() {
+    this.cleanupSubscription();
+  },
 };
 </script>
 
@@ -81,6 +187,7 @@ export default {
 .title { font-weight:600; }
 .icon { background:transparent; border:none; cursor:pointer; }
 .messages { flex:1; overflow-y:auto; padding:12px; }
+.empty { color:#868e96; padding:20px; text-align:center; }
 .msg { display:flex; margin:6px 0; }
 .msg.mine { justify-content:flex-end; }
 .bubble { max-width:65%; padding:8px 10px; border-radius:10px; background:#f1f3f5; }
