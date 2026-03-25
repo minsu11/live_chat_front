@@ -1,133 +1,140 @@
-// ws-client.js (Vue용 WebSocket 클라이언트 with @stomp/stompjs)
 import { Client } from '@stomp/stompjs';
 import api from '@/plugins/axios.js';
 import SockJS from 'sockjs-client';
 
-
 let stompClient = null;
-let reconnectTimeout = null;
+let connectPromise = null;
 let subscriptions = [];
-let lastMessageTimestamps = {};
-let retryCount = 0;
-const MAX_RETRIES = 5;
-export async function connectWebSocket() {
-    console.log('🔌 WebSocket 연결 시도');
-    // access token data 가지고 오기
 
-
-    try{
-        const res = await api.get('/ws/token');
-        const accessToken = res;
-        console.log("token 가지고 옴")
-        console.log("cookie: " + accessToken)
-        const socket_api= api.defaults.baseURL;
-        console.log(socket_api);
-        stompClient = new Client({
-            webSocketFactory: () => new SockJS(`${socket_api}/ws-chat`), // 여기 중요
-            connectHeaders: {
-                Authorization: `Bearer ${accessToken}`, // 헤더에 붙임
-            },
-            reconnectDelay: 0,
-            onConnect: () => {
-                console.log('✅ WebSocket connected');
-                // 끊겼다가 다시 붙었을 떄 기존 구독 복원
-                // reconnectSubscriptions();
-            },
-            onStompError: (frame) => {
-                console.error('❌ STOMP Error:', frame);
-                // attemptReconnect();
-            },
-            onWebSocketClose: () => {
-                console.warn('🔌 WebSocket closed');
-                // attemptReconnect();
-                if (retryCount < MAX_RETRIES) {
-                    retryCount++;
-                    console.log(`🔁 ${retryCount}번째 WebSocket 재연결 시도`);
-                    setTimeout(() => connectWebSocket(), 3000);
-                } else {
-                    console.error('❌ WebSocket 재연결 중단 (최대 시도 초과)');
-                }
-            },
-        });
-
-        stompClient.activate();
-    }catch(e){
-        console.error("error")
+export function connectWebSocket() {
+    if (stompClient?.connected) {
+        console.log('✅ 이미 WebSocket 연결됨');
+        return Promise.resolve(stompClient);
     }
 
+    if (connectPromise) {
+        console.log('⏳ 기존 WebSocket 연결 진행 중');
+        return connectPromise;
+    }
+
+    connectPromise = new Promise(async (resolve, reject) => {
+        let settled = false;
+
+        const safeResolve = (value) => {
+            if (settled) return;
+            settled = true;
+            connectPromise = null;
+            resolve(value);
+        };
+
+        const safeReject = (error) => {
+            if (settled) return;
+            settled = true;
+            connectPromise = null;
+            reject(error);
+        };
+
+        try {
+            console.log('🔌 WebSocket 연결 시작');
+
+            const res = await api.get('/ws/token');
+            console.log('ws token response=', res);
+
+            // 네 axios 플러그인 구조에 따라 둘 중 하나 선택
+            const accessToken = typeof res === 'string' ? res : res?.data;
+
+            if (!accessToken) {
+                throw new Error('WebSocket 토큰이 비어 있음');
+            }
+
+            const socketApi = api.defaults.baseURL;
+            console.log('socketApi=', socketApi);
+
+            stompClient = new Client({
+                webSocketFactory: () => new SockJS(`${socketApi}/ws-chat`),
+                connectHeaders: {
+                    Authorization: `Bearer ${accessToken}`,
+                },
+                reconnectDelay: 0,
+
+                onConnect: (frame) => {
+                    console.log('✅ WebSocket connected', frame);
+                    safeResolve(stompClient);
+                },
+
+                onStompError: (frame) => {
+                    console.error('❌ STOMP Error:', frame);
+                    safeReject(frame);
+                },
+
+                onWebSocketError: (event) => {
+                    console.error('❌ WebSocket Error:', event);
+                    safeReject(event);
+                },
+
+                onWebSocketClose: (event) => {
+                    console.warn('🔌 WebSocket closed:', event);
+                    // 연결 성공 전에 닫힌 경우만 reject
+                    if (!stompClient?.connected) {
+                        safeReject(event);
+                    }
+                },
+            });
+
+            stompClient.activate();
+
+            setTimeout(() => {
+                if (!stompClient?.connected) {
+                    safeReject(new Error('WebSocket 연결 timeout'));
+                }
+            }, 5000);
+        } catch (e) {
+            console.error('❌ connectWebSocket 실패', e);
+            safeReject(e);
+        }
+    });
+
+    return connectPromise;
 }
 
 export function subscribe(destination, callback) {
+    console.log('📡 subscribe 시도:', destination, 'connected=', stompClient?.connected);
+
     if (!stompClient || !stompClient.connected) {
         console.warn('WebSocket이 연결되지 않아 구독 실패:', destination);
-        return;
+        return null;
     }
 
     const sub = stompClient.subscribe(destination, (message) => {
         const data = JSON.parse(message.body);
-        lastMessageTimestamps[destination] = Date.now();
+        console.log('📥 실시간 메시지 수신:', destination, data);
         callback(data);
     });
 
-    subscriptions.push({ destination, callback });
+    subscriptions.push(sub);
     return sub;
 }
 
 export function sendMessage(destination, payload) {
-    if (stompClient && stompClient.connected) {
-        console.log("send message start");
-        stompClient.publish({ destination, body: JSON.stringify(payload) });
-        console.log("send message end");
-    } else {
+    console.log('📤 sendMessage:', destination, payload, 'connected=', stompClient?.connected);
+
+    if (!stompClient || !stompClient.connected) {
         console.warn('⚠️ WebSocket이 연결되어 있지 않습니다.');
+        return;
     }
+
+    stompClient.publish({
+        destination,
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(payload),
+    });
 }
 
 export function disconnectWebSocket() {
     if (stompClient) {
         stompClient.deactivate();
+        stompClient = null;
+        connectPromise = null;
         console.log('🔌 WebSocket disconnected');
     }
-}
-
-async function fetchMissedMessages(destination, callback) {
-    const lastTimestamp = lastMessageTimestamps[destination];
-    if (!lastTimestamp) return;
-
-    try {
-        const res = await axios.get(`/messages`, {
-            params: { channel: destination, since: lastTimestamp },
-        });
-        res.forEach(msg => callback(msg));
-        console.log(`📥 ${destination} 채널의 누락 메시지 불러옴`);
-    } catch (err) {
-        console.error(`❌ ${destination} 채널 누락 메시지 불러오기 실패`, err);
-    }
-}
-
-function reconnectSubscriptions() {
-    subscriptions.forEach(({ destination, callback }) => {
-        stompClient.subscribe(destination, (message) => {
-            const data = JSON.parse(message.body);
-            lastMessageTimestamps[destination] = Date.now();
-            callback(data);
-        });
-
-        fetchMissedMessages(destination, callback);
-    });
-}
-
-function attemptReconnect() {
-    if (reconnectTimeout) return;
-
-    reconnectTimeout = setTimeout(async () => {
-        reconnectTimeout = null;
-        try {
-            await axios.post('/api/reissue', {}, { withCredentials: true });
-            console.log('🔄 토큰 재발급 성공, WebSocket 재연결 시도...');
-            connectWebSocket();
-        } catch (err) {
-            console.error('🚫 토큰 재발급 실패, 로그인 필요');
-        }
-    }, 3000);
 }

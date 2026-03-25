@@ -16,9 +16,19 @@
           class="msg"
           :class="{ mine: m.mine }"
       >
-        <div class="bubble">
-          <div class="text">{{ m.text }}</div>
-          <div class="meta">{{ format(m.at) }}</div>
+        <!-- 상대 메시지만 프로필 표시 -->
+        <div v-if="!m.mine" class="avatar">
+          <img :src="m.profileImageUrl || defaultImage" alt="profile" />
+        </div>
+
+        <div class="msg-body">
+          <!-- 상대 메시지만 이름 표시 -->
+          <div v-if="!m.mine" class="name">{{ m.name }}</div>
+
+          <div class="bubble">
+            <div class="text">{{ m.text }}</div>
+            <div class="meta">{{ format(m.at) }}</div>
+          </div>
         </div>
       </div>
     </section>
@@ -38,9 +48,11 @@
 <script>
 import Api from '@/plugins/axios.js';
 import { connectWebSocket, subscribe, sendMessage } from '@/services/ws-client.js';
+import DefaultImage from '@/assets/default_image.png';
 
 export default {
   name: 'ChatPanel',
+
   data() {
     return {
       roomTitle: '',
@@ -50,6 +62,7 @@ export default {
       roomId: '',
       loading: false,
       me: null,
+      defaultImage: DefaultImage,
     };
   },
 
@@ -57,11 +70,13 @@ export default {
     await this.loadMe();
     await this.loadRoom(this.$route.params.roomId);
   },
+
   computed: {
     currentRoomId() {
       return this.$route.params.roomId;
     },
   },
+
   watch: {
     async currentRoomId(nextId) {
       await this.loadRoom(nextId);
@@ -94,32 +109,41 @@ export default {
         this.cleanupSubscription();
 
         const res = await Api.get(`/v1/chat-room/${roomId}/enter`);
+        console.log('response:', res);
 
         this.roomTitle = res?.title ?? '채팅방';
 
         this.messages = (res?.messages ?? []).map((m) => ({
-          id: m.id,
-          text: m.messageContent ?? m.text ?? '',
+          id: m.id ?? m.messageId,
+          name: m.senderNickname ?? m.sender?.senderNickname ?? '',
+          text: m.content ?? m.text ?? '',
           at: m.createdAt ?? m.at ?? new Date().toISOString(),
-          mine: Number(m.senderId) === Number(this.me?.id),
+          mine: m.mine ?? m.sender?.mine ?? false,
+          profileImageUrl:
+              m.profileImageUrl ??
+              m.sender?.profileImageUrl ??
+              this.defaultImage,
         }));
-        console.log(this.roomTitle);
 
         await this.$nextTick();
         this.scrollToBottom();
 
         await connectWebSocket();
-        // todo 임시 주석 차단
-        // this.unsub = subscribe(`/sub/chat/rooms/${roomId}`, (msg) => {
-        //   this.messages.push({
-        //     id: msg.id ?? Date.now(),
-        //     text: msg.messageContent ?? msg.text ?? '',
-        //     at: msg.createdAt ?? new Date().toISOString(),
-        //     mine: Number(msg.senderId) === Number(this.me?.id),
-        //   });
-        //
-        //   this.$nextTick(() => this.scrollToBottom());
-        // });
+
+        this.unsub = subscribe(`/user/api/sub/chat/rooms/${roomId}`, (msg) => {
+          console.log('실시간 수신:', msg);
+
+          this.messages.push({
+            id: msg.messageId ?? Date.now(),
+            name: msg.sender?.senderNickname ?? '',
+            text: msg.content ?? msg.text ?? '',
+            at: msg.createdAt ?? new Date().toISOString(),
+            mine: msg.sender?.mine ?? msg.mine ?? false,
+            profileImageUrl: msg.sender?.profileImageUrl ?? this.defaultImage,
+          });
+
+          this.$nextTick(() => this.scrollToBottom());
+        });
       } catch (e) {
         console.error('채팅방 로드 실패', e);
         this.roomTitle = '';
@@ -133,17 +157,10 @@ export default {
       const text = this.draft.trim();
       if (!text || !this.roomId) return;
 
-      sendMessage('/pub/chat/message', {
+      sendMessage('/api/pub/chat/message', {
         roomId: Number(this.roomId),
-        messageType: 'TALK',
+        messageType: 'TEXT',
         messageContent: text,
-      });
-
-      this.messages.push({
-        id: Date.now(),
-        text,
-        at: new Date().toISOString(),
-        mine: true,
       });
 
       this.draft = '';
@@ -164,9 +181,13 @@ export default {
 
     scrollToBottom() {
       const el = this.$refs.list;
-      if (el) {
-        el.scrollTop = el.scrollHeight;
-      }
+      if (!el) return;
+
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          el.scrollTop = el.scrollHeight;
+        });
+      });
     },
 
     format(iso) {
@@ -181,21 +202,153 @@ export default {
 };
 </script>
 
-<style scoped>
-.panel { height:100%; display:flex; flex-direction:column; background:#fff; }
-.header { height:52px; display:flex; align-items:center; justify-content:space-between; padding:0 12px; border-bottom:1px solid #e9ecef; }
-.title { font-weight:600; }
-.icon { background:transparent; border:none; cursor:pointer; }
-.messages { flex:1; overflow-y:auto; padding:12px; }
-.empty { color:#868e96; padding:20px; text-align:center; }
-.msg { display:flex; margin:6px 0; }
-.msg.mine { justify-content:flex-end; }
-.bubble { max-width:65%; padding:8px 10px; border-radius:10px; background:#f1f3f5; }
-.msg.mine .bubble { background:#4dabf7; color:#fff; }
-.text { white-space:pre-wrap; word-break:break-word; }
-.meta { font-size:11px; opacity:.7; margin-top:4px; text-align:right; }
-.composer { display:flex; gap:8px; padding:10px; border-top:1px solid #e9ecef; }
-.input { flex:1; border:1px solid #dee2e6; border-radius:8px; padding:8px 10px; }
-.send { border:none; border-radius:8px; padding:0 14px; background:#4dabf7; color:#fff; cursor:pointer; }
-.send:disabled { opacity:.6; cursor:default; }
+<<style scoped>
+.panel {
+  height: 100vh;
+  max-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+  overflow: hidden;
+  min-height: 0;
+}
+
+.header {
+  height: 52px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 12px;
+  border-bottom: 1px solid #e9ecef;
+}
+
+.title {
+  font-weight: 600;
+}
+
+.icon {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+}
+
+.messages {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 12px;
+  background: #f7f7f8;
+  overscroll-behavior: contain;
+}
+
+.empty {
+  color: #868e96;
+  padding: 20px;
+  text-align: center;
+}
+
+.msg {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 10px 0;
+}
+
+.msg.mine {
+  justify-content: flex-end;
+}
+
+.avatar {
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.avatar img {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  object-fit: cover;
+  display: block;
+}
+
+.msg-body {
+  display: flex;
+  flex-direction: column;
+  max-width: 65%;
+}
+
+.name {
+  font-size: 12px;
+  color: #666;
+  margin-bottom: 4px;
+  padding-left: 2px;
+}
+
+.bubble {
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+}
+
+.msg.mine .msg-body {
+  align-items: flex-end;
+}
+
+.msg.mine .bubble {
+  background: #4dabf7;
+  color: #fff;
+  border-bottom-right-radius: 4px;
+}
+
+.msg:not(.mine) .bubble {
+  border-bottom-left-radius: 4px;
+}
+
+.text {
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.4;
+}
+
+.meta {
+  font-size: 11px;
+  opacity: 0.7;
+  margin-top: 4px;
+  text-align: right;
+}
+
+.composer {
+  flex-shrink: 0;
+  display: flex;
+  gap: 8px;
+  padding: 10px;
+  border-top: 1px solid #e9ecef;
+  background: #fff;
+}
+
+.input {
+  flex: 1;
+  border: 1px solid #dee2e6;
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+
+.send {
+  border: none;
+  border-radius: 8px;
+  padding: 0 14px;
+  background: #4dabf7;
+  color: #fff;
+  cursor: pointer;
+}
+
+.send:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
 </style>
