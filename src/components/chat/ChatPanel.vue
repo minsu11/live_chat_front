@@ -84,6 +84,7 @@ export default {
   },
 
   methods: {
+    // todo 채팅방에 들어올 때 내꺼 프로필을 한 번 더 조회함, 해당 부분도 업데이트를 시켜서 할 수 있을 거같음
     async loadMe() {
       try {
         const res = await Api.get('/v1/users/me/profile/summary');

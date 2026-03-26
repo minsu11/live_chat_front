@@ -55,6 +55,7 @@ export default {
       try {
         const room = payload?.item;
         const roomId = room?.id;
+        console.log("room: ",room);
 
         if (!roomId) {
           alert('채팅방 정보가 없습니다.');
@@ -62,6 +63,7 @@ export default {
         }
 
         await openExistingChat(this.$router, roomId);
+        room.unreadCount = 0;
       } catch (e) {
         console.error(e);
         alert('채팅방 이동 중 오류가 발생했습니다.');

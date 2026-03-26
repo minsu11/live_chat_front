@@ -25,6 +25,8 @@
 import RoomCard from '@/components/sidebar/RoomCard.vue';
 import defaultProfile from '@/assets/default_image.png';
 import { fetchChats } from '@/assets/js/chats.js';
+import api from '@/plugins/axios.js';
+import { connectWebSocket, subscribe } from '@/services/ws-client.js';
 
 function formatTime(isoOrLocalDateTime) {
   try {
@@ -39,51 +41,80 @@ function formatTime(isoOrLocalDateTime) {
 
 export default {
   name: 'ChatList',
-  components: { RoomCard },
+  components: {RoomCard},
   emits: ['open-chat'],
-  props: { pageSize: { type: Number, default: 50 } },
+  props: {
+    pageSize: {type: Number, default: 50},
+  },
   data() {
     return {
       defaultProfile,
       items: [],
-      cursor: null,      // 서버가 준 next 커서만 보관
+      cursor: null,
       loading: false,
       observer: null,
       error: null,
+      me: null,
+      summarySubscription: null,
     };
   },
   computed: {
-    // next 커서 존재 여부로 다음 페이지 판단
     hasNext() {
       return !!this.cursor;
     },
+    myUserId() {
+
+      return this.me?.id ?? this.me?.userId ?? null;
+    },
   },
-  mounted() {
-    this.loadInitial();
+  async mounted() {
+    await this.loadMyProfile();
+    await this.loadInitial();
+    await this.subscribeRoomSummary();
+
     this.observer = new IntersectionObserver((entries) => {
       if (entries[0].isIntersecting && this.hasNext && !this.loading) {
         this.loadMore();
       }
     });
+
     this.observer.observe(this.$refs.sentinel);
   },
   beforeUnmount() {
-    if (this.observer) this.observer.disconnect();
+    if (this.observer) {
+      this.observer.disconnect();
+    }
+
+    if (this.summarySubscription) {
+      this.summarySubscription.unsubscribe();
+      this.summarySubscription = null;
+    }
   },
   methods: {
+    async loadMyProfile() {
+      try {
+        const res = await api.get('/v1/users/me/profile/summary');
+        this.me = res?.data ?? res;
+        console.log("this.me: ",this.me);
+      } catch (e) {
+        console.error('내 정보 조회 실패', e);
+      }
+    },
+
     async loadInitial() {
       this.loading = true;
       this.error = null;
+
       try {
-        const { items, next } = await fetchChats({
+        const {items, next} = await fetchChats({
           limit: this.pageSize,
           cursor: null,
         });
 
-
         this.items = items.map((it) => ({
-          id: it.roomId ?? it.id,
-          title: it.name ?? it.roomName,
+          id: it.roomId ?? it.chatRoomId ?? it.id,
+          title: it.name ?? it.roomName ?? it.title,
+          unreadCount: it.unreadCount ?? 0,
           profile: it.profileUrl ?? null,
           lastMessageAt: it.lastMessageAt ?? null,
           lastMessageAtDisplay: formatTime(it.lastMessageAt),
@@ -91,9 +122,8 @@ export default {
           raw: it,
         }));
 
-        this.cursor = next; // string | null
+        this.cursor = next;
 
-        // 더 없음이면 옵저버 해제
         if (!this.hasNext && this.observer) {
           this.observer.unobserve(this.$refs.sentinel);
         }
@@ -107,8 +137,10 @@ export default {
 
     async loadMore() {
       if (!this.hasNext || this.loading) return;
+
       this.loading = true;
       this.error = null;
+
       try {
         const {items, next} = await fetchChats({
           limit: this.pageSize,
@@ -116,8 +148,9 @@ export default {
         });
 
         const mapped = items.map((it) => ({
-          id: it.chatRoomId ?? it.id,
-          title: it.name ?? it.title,
+          id: it.roomId ?? it.chatRoomId ?? it.id,
+          title: it.name ?? it.roomName ?? it.title,
+          unreadCount: it.unreadCount ?? 0,
           profile: it.profileUrl ?? null,
           lastMessageAt: it.lastMessageAt ?? null,
           lastMessageAtDisplay: formatTime(it.lastMessageAt),
@@ -139,11 +172,68 @@ export default {
       }
     },
 
-    async refresh() {
-      this.cursor = null;
-      this.items = [];
-      if (this.observer) this.observer.observe(this.$refs.sentinel);
-      await this.loadInitial();
+    // async refresh() {
+    //   this.cursor = null;
+    //   this.items = [];
+    //
+    //   if (this.observer) {
+    //     this.observer.observe(this.$refs.sentinel);
+    //   }
+    //
+    //   await this.loadInitial();
+    // },
+
+    async subscribeRoomSummary() {
+      // if (!this.myUserId) {
+      //   console.warn('summary 구독 실패: myUserId 없음');
+      //   return;
+      // }
+
+      try {
+        await connectWebSocket();
+
+        const destination = `/user/api/sub/chat/summary`;
+
+        this.summarySubscription = subscribe(destination, (event) => {
+          this.applySummaryEvent(event);
+        });
+
+        if (!this.summarySubscription) {
+          console.warn('summary 구독 실패: subscription 생성 실패');
+          return;
+        }
+
+        console.log('summary 구독 완료:', destination);
+      } catch (e) {
+        console.error('summary 구독 실패', e);
+      }
+    },
+
+    applySummaryEvent(event) {
+      const roomId = event?.roomId;
+      if (!roomId) return;
+
+      const index = this.items.findIndex((item) => item.id === roomId);
+
+      if (index === -1) {
+        return;
+      }
+
+      const existing = this.items[index];
+
+      const updated = {
+        ...existing,
+        unreadCount: event.unreadCount ?? existing.unreadCount ?? 0,
+        lastMessagePreview: event.lastMessagePreview ?? existing.lastMessagePreview,
+        lastMessageAt: event.lastMessageAt ?? existing.lastMessageAt,
+        lastMessageAtDisplay: formatTime(event.lastMessageAt ?? existing.lastMessageAt),
+      };
+
+      const copied = [...this.items];
+      copied.splice(index, 1);
+      copied.unshift(updated);
+
+      this.items = copied;
     },
   },
 };
