@@ -62,8 +62,20 @@ export default {
       roomId: '',
       loading: false,
       me: null,
+      readTimer: null,
+      pendingReadMessageId: null,
       defaultImage: DefaultImage,
     };
+  },
+
+  beforeMount() {
+    if(this.unsub){
+      // 구독된 상태라면 구독 취소
+
+      // this.unsub = null;
+    }
+
+
   },
 
   async mounted() {
@@ -133,17 +145,30 @@ export default {
 
         this.unsub = subscribe(`/user/api/sub/chat/rooms/${roomId}`, (msg) => {
           console.log('실시간 수신:', msg);
-
+          const mine = msg.sender?.mine ?? msg.mine ?? false;
           this.messages.push({
             id: msg.messageId ?? Date.now(),
             name: msg.sender?.senderNickname ?? '',
             text: msg.content ?? msg.text ?? '',
             at: msg.createdAt ?? new Date().toISOString(),
-            mine: msg.sender?.mine ?? msg.mine ?? false,
+            mine: mine,
             profileImageUrl: msg.sender?.profileImageUrl ?? this.defaultImage,
           });
 
           this.$nextTick(() => this.scrollToBottom());
+
+          // 내가 보낸 메시지는 굳이 READ 안 보내도 됨
+          if (mine) {
+            return;
+          }
+
+          const isActiveRoom = String(this.roomId) === String(roomId);
+          const isVisibleTab = document.visibilityState === 'visible';
+
+          if(!isVisibleTab){
+            return;
+          }
+          this.sendReadDebounced(roomId, msg.messageId);
         });
       } catch (e) {
         console.error('채팅방 로드 실패', e);
@@ -166,6 +191,23 @@ export default {
 
       this.draft = '';
       this.$nextTick(() => this.scrollToBottom());
+    },
+
+    sendReadDebounced(roomId, messageId) { // 실시간으로 read event
+      this.pendingReadMessageId = messageId;
+      console.log("pending read message id: ", pendingReadMessageId);
+      if (this.readTimer) {
+        clearTimeout(this.readTimer);
+      }
+
+      this.readTimer = setTimeout(() => {
+        sendMessage('/api/pub/chat/read', {
+          roomId,
+          messageId: this.pendingReadMessageId,
+        });
+
+        this.readTimer = null;
+      }, 200);
     },
 
     cleanupSubscription() {
