@@ -1,4 +1,3 @@
-<!-- src/components/chat/ChatPanel.vue -->
 <template>
   <div class="panel">
     <header class="header">
@@ -16,18 +15,21 @@
           class="msg"
           :class="{ mine: m.mine }"
       >
-        <!-- 상대 메시지만 프로필 표시 -->
         <div v-if="!m.mine" class="avatar">
           <img :src="m.profileImageUrl || defaultImage" alt="profile" />
         </div>
 
         <div class="msg-body">
-          <!-- 상대 메시지만 이름 표시 -->
           <div v-if="!m.mine" class="name">{{ m.name }}</div>
 
-          <div class="bubble">
-            <div class="text">{{ m.text }}</div>
-            <div class="meta">{{ format(m.at) }}</div>
+          <div class="bubble-wrap" :class="{ mine: m.mine }">
+            <div v-if="m.mine && m.unreadCount > 0" class="unread-mark">
+              {{ m.unreadCount }}
+            </div>
+            <div class="bubble">
+              <div class="text">{{ m.text }}</div>
+              <div class="meta">{{ format(m.at) }}</div>
+            </div>
           </div>
         </div>
       </div>
@@ -59,27 +61,27 @@ export default {
       messages: [],
       draft: '',
       unsub: null,
+      readUnsub: null,
       roomId: '',
       loading: false,
       me: null,
+
       readTimer: null,
       pendingReadMessageId: null,
+      pendingVisibleReadMessageId: null,
+      isReloadingMessages: false,
+
+      // readerUserId -> lastReadMessageId
+      lastReadByUser: {},
+      roomMemberCount: 0,
+
       defaultImage: DefaultImage,
     };
   },
 
-  beforeMount() {
-    if(this.unsub){
-      // 구독된 상태라면 구독 취소
-
-      // this.unsub = null;
-    }
-
-
-  },
-
   async mounted() {
     await this.loadMe();
+    document.addEventListener('visibilitychange', this.handleVisibilityChange);
     await this.loadRoom(this.$route.params.roomId);
   },
 
@@ -96,13 +98,45 @@ export default {
   },
 
   methods: {
-    // todo 채팅방에 들어올 때 내꺼 프로필을 한 번 더 조회함, 해당 부분도 업데이트를 시켜서 할 수 있을 거같음
     async loadMe() {
       try {
         const res = await Api.get('/v1/users/me/profile/summary');
-        this.me = res.data;
+        this.me = res?.data ?? res;
+        console.log("me: ", this.me);
       } catch (e) {
         console.error('내 정보 조회 실패', e);
+      }
+    },
+    mapMessage(m) {
+      return {
+        id: m.id ?? m.messageId,
+        name: m.senderNickname ?? m.sender?.senderNickname ?? '',
+        text: m.content ?? m.text ?? '',
+        at: m.createdAt ?? m.at ?? new Date().toISOString(),
+        mine: m.mine ?? false,
+        unreadCount: m.unreadCount ?? 0,
+        senderUserUuid: m.sender?.senderUuid ?? m.senderUserUuid ?? null,
+        profileImageUrl:
+            m.profileImageUrl ??
+            m.sender?.profileImageUrl ??
+            this.defaultImage,
+      };
+    },
+
+    async reloadRoomMessagesOnly(roomId) {
+      if (this.isReloadingMessages) return;
+      this.isReloadingMessages = true;
+      console.log("reloadRoomMessagesOnly", roomId);
+
+      try {
+        const res = await Api.get(`/v1/chat-room/${roomId}/messages`);
+        console.log("reload success")
+        const data = res?.data ?? res;
+
+        this.roomTitle = data?.title ?? '채팅방';
+        this.messages = (data?.messages ?? []).map(this.mapMessage);
+      } finally {
+        this.isReloadingMessages = false;
       }
     },
 
@@ -111,6 +145,7 @@ export default {
         this.roomTitle = '';
         this.messages = [];
         this.roomId = '';
+        this.lastReadByUser = {};
         this.cleanupSubscription();
         return;
       }
@@ -118,62 +153,81 @@ export default {
       try {
         this.loading = true;
         this.roomId = String(roomId);
+        this.lastReadByUser = {};
+        this.pendingReadMessageId = null;
+        this.pendingVisibleReadMessageId = null;
 
         this.cleanupSubscription();
 
         const res = await Api.get(`/v1/chat-room/${roomId}/enter`);
-        console.log('response:', res);
+        const data = res;
 
-        this.roomTitle = res?.title ?? '채팅방';
+        console.log('enter response:', data);
 
-        this.messages = (res?.messages ?? []).map((m) => ({
-          id: m.id ?? m.messageId,
-          name: m.senderNickname ?? m.sender?.senderNickname ?? '',
-          text: m.content ?? m.text ?? '',
-          at: m.createdAt ?? m.at ?? new Date().toISOString(),
-          mine: m.mine ?? m.sender?.mine ?? false,
-          profileImageUrl:
-              m.profileImageUrl ??
-              m.sender?.profileImageUrl ??
-              this.defaultImage,
-        }));
+        this.roomTitle = data?.title ?? '채팅방';
+
+        this.messages = (data?.messages ?? []).map(this.mapMessage);
+
+        console.log("sender uuid: ", this.messages);
 
         await this.$nextTick();
         this.scrollToBottom();
 
         await connectWebSocket();
 
+        // 메시지 구독
         this.unsub = subscribe(`/user/api/sub/chat/rooms/${roomId}`, (msg) => {
-          console.log('실시간 수신:', msg);
+          console.log('실시간 메시지 수신:', msg);
+
           const mine = msg.sender?.mine ?? msg.mine ?? false;
+          const messageId = msg.messageId ?? Date.now();
+
           this.messages.push({
-            id: msg.messageId ?? Date.now(),
+            id: messageId,
             name: msg.sender?.senderNickname ?? '',
             text: msg.content ?? msg.text ?? '',
             at: msg.createdAt ?? new Date().toISOString(),
-            mine: mine,
+            mine,
+            unreadCount: msg.unreadCount ?? 0,
+            senderUserUuid: msg.sender?.senderUserId ?? msg.sender?.userId ?? null,
             profileImageUrl: msg.sender?.profileImageUrl ?? this.defaultImage,
           });
 
           this.$nextTick(() => this.scrollToBottom());
 
-          // 내가 보낸 메시지는 굳이 READ 안 보내도 됨
+          // 내가 보낸 메시지는 서버에서 이미 sender read 처리됨
           if (mine) {
             return;
           }
 
-          const isActiveRoom = String(this.roomId) === String(roomId);
-          const isVisibleTab = document.visibilityState === 'visible';
-
-          if(!isVisibleTab){
+          // 현재 room이 맞고, 탭이 visible이면 read 전송
+          if (String(this.roomId) !== String(roomId)) {
             return;
           }
-          this.sendReadDebounced(roomId, msg.messageId);
+
+          if (document.visibilityState !== 'visible') {
+            this.pendingVisibleReadMessageId = messageId;
+            return;
+          }
+
+          this.sendReadDebounced(roomId, messageId);
+        });
+
+        // 읽음 업데이트 구독
+        this.readUnsub = subscribe(`/user/api/sub/chat/rooms/${roomId}/read`, async (event) => {
+          console.log('READ_UPDATED 수신:', event);
+
+          if (String(this.roomId) !== String(roomId)) {
+            return;
+          }
+
+          await this.reloadRoomMessagesOnly(roomId);
         });
       } catch (e) {
         console.error('채팅방 로드 실패', e);
         this.roomTitle = '';
         this.messages = [];
+        this.lastReadByUser = {};
       } finally {
         this.loading = false;
       }
@@ -193,16 +247,17 @@ export default {
       this.$nextTick(() => this.scrollToBottom());
     },
 
-    sendReadDebounced(roomId, messageId) { // 실시간으로 read event
+    sendReadDebounced(roomId, messageId) {
       this.pendingReadMessageId = messageId;
-      console.log("pending read message id: ", pendingReadMessageId);
+      console.log('pending read message id:', this.pendingReadMessageId);
+
       if (this.readTimer) {
         clearTimeout(this.readTimer);
       }
 
       this.readTimer = setTimeout(() => {
         sendMessage('/api/pub/chat/read', {
-          roomId,
+          roomId: Number(roomId),
           messageId: this.pendingReadMessageId,
         });
 
@@ -210,18 +265,38 @@ export default {
       }, 200);
     },
 
-    cleanupSubscription() {
-      if (!this.unsub) return;
-
-      if (typeof this.unsub === 'function') {
-        this.unsub();
-      } else if (typeof this.unsub.unsubscribe === 'function') {
-        this.unsub.unsubscribe();
+    handleVisibilityChange() {
+      if (document.visibilityState !== 'visible') {
+        return;
       }
 
-      this.unsub = null;
+      if (!this.pendingVisibleReadMessageId || !this.roomId) {
+        return;
+      }
+
+      this.sendReadDebounced(this.roomId, this.pendingVisibleReadMessageId);
+      this.pendingVisibleReadMessageId = null;
     },
 
+    cleanupSubscription() {
+      if (this.unsub) {
+        if (typeof this.unsub === 'function') {
+          this.unsub();
+        } else if (typeof this.unsub.unsubscribe === 'function') {
+          this.unsub.unsubscribe();
+        }
+        this.unsub = null;
+      }
+
+      if (this.readUnsub) {
+        if (typeof this.readUnsub === 'function') {
+          this.readUnsub();
+        } else if (typeof this.readUnsub.unsubscribe === 'function') {
+          this.readUnsub.unsubscribe();
+        }
+        this.readUnsub = null;
+      }
+    },
     scrollToBottom() {
       const el = this.$refs.list;
       if (!el) return;
@@ -235,17 +310,25 @@ export default {
 
     format(iso) {
       const d = new Date(iso);
-      return Number.isNaN(d) ? '' : d.toLocaleString();
+      return Number.isNaN(d.getTime()) ? '' : d.toLocaleString();
     },
+
   },
 
   beforeUnmount() {
     this.cleanupSubscription();
+
+    if (this.readTimer) {
+      clearTimeout(this.readTimer);
+      this.readTimer = null;
+    }
+
+    document.removeEventListener('visibilitychange', this.handleVisibilityChange);
   },
 };
 </script>
 
-<<style scoped>
+<style scoped>
 .panel {
   height: 100vh;
   max-height: 100vh;
@@ -393,5 +476,30 @@ export default {
 .send:disabled {
   opacity: 0.6;
   cursor: default;
+}
+
+.bubble-wrap {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+}
+
+.bubble-wrap.mine {
+  justify-content: flex-end;
+}
+
+.read-mark {
+  font-size: 11px;
+  color: #868e96;
+  white-space: nowrap;
+  margin-bottom: 4px;
+}
+
+.unread-mark {
+  font-size: 12px;
+  color: #f03e3e;
+  white-space: nowrap;
+  margin-bottom: 4px;
+  font-weight: 600;
 }
 </style>

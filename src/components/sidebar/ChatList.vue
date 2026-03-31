@@ -64,11 +64,11 @@ export default {
     },
     myUserId() {
 
-      return this.me?.id ?? this.me?.userId ?? null;
+      return this.me?.id ?? this.me?.userId ?? me.uuid ?? null;
     },
   },
   async mounted() {
-    await this.loadMyProfile();
+    // await this.loadMyProfile();
     await this.loadInitial();
     await this.subscribeRoomSummary();
 
@@ -91,15 +91,15 @@ export default {
     }
   },
   methods: {
-    async loadMyProfile() {
-      try {
-        const res = await api.get('/v1/users/me/profile/summary');
-        this.me = res?.data ?? res;
-        console.log("this.me: ",this.me);
-      } catch (e) {
-        console.error('내 정보 조회 실패', e);
-      }
-    },
+    // async loadMyProfile() {
+    //   try {
+    //     const res = await api.get('/v1/users/me/profile/summary');
+    //     this.me = res?.data ?? res;
+    //     console.log("this.me: ",this.me);
+    //   } catch (e) {
+    //     console.error('내 정보 조회 실패', e);
+    //   }
+    // },
 
     async loadInitial() {
       this.loading = true;
@@ -172,23 +172,18 @@ export default {
       }
     },
 
-    // async refresh() {
-    //   this.cursor = null;
-    //   this.items = [];
-    //
-    //   if (this.observer) {
-    //     this.observer.observe(this.$refs.sentinel);
-    //   }
-    //
-    //   await this.loadInitial();
-    // },
+    async refresh() {
+      this.cursor = null;
+      this.items = [];
+
+      if (this.observer) {
+        this.observer.observe(this.$refs.sentinel);
+      }
+
+      await this.loadInitial();
+    },
 
     async subscribeRoomSummary() {
-      // if (!this.myUserId) {
-      //   console.warn('summary 구독 실패: myUserId 없음');
-      //   return;
-      // }
-
       try {
         await connectWebSocket();
 
