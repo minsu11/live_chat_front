@@ -20,12 +20,10 @@
     <div ref="sentinel" style="height:1px;"></div>
   </div>
 </template>
-
 <script>
 import RoomCard from '@/components/sidebar/RoomCard.vue';
 import defaultProfile from '@/assets/default_image.png';
 import { fetchChats } from '@/assets/js/chats.js';
-import api from '@/plugins/axios.js';
 import { connectWebSocket, subscribe } from '@/services/ws-client.js';
 
 function formatTime(isoOrLocalDateTime) {
@@ -41,10 +39,11 @@ function formatTime(isoOrLocalDateTime) {
 
 export default {
   name: 'ChatList',
-  components: {RoomCard},
+  components: { RoomCard },
   emits: ['open-chat'],
   props: {
-    pageSize: {type: Number, default: 50},
+    pageSize: { type: Number, default: 50 },
+    activeRoomId: { type: [Number, String], default: null },
   },
   data() {
     return {
@@ -54,21 +53,16 @@ export default {
       loading: false,
       observer: null,
       error: null,
-      me: null,
       summarySubscription: null,
+      refreshTimer: null,
     };
   },
   computed: {
     hasNext() {
       return !!this.cursor;
     },
-    myUserId() {
-
-      return this.me?.id ?? this.me?.userId ?? me.uuid ?? null;
-    },
   },
   async mounted() {
-    // await this.loadMyProfile();
     await this.loadInitial();
     await this.subscribeRoomSummary();
 
@@ -86,42 +80,44 @@ export default {
     }
 
     if (this.summarySubscription) {
-      this.summarySubscription.unsubscribe();
+      if (typeof this.summarySubscription.unsubscribe === 'function') {
+        this.summarySubscription.unsubscribe();
+      } else if (typeof this.summarySubscription === 'function') {
+        this.summarySubscription();
+      }
       this.summarySubscription = null;
+    }
+
+    if (this.refreshTimer) {
+      clearTimeout(this.refreshTimer);
+      this.refreshTimer = null;
     }
   },
   methods: {
-    // async loadMyProfile() {
-    //   try {
-    //     const res = await api.get('/v1/users/me/profile/summary');
-    //     this.me = res?.data ?? res;
-    //     console.log("this.me: ",this.me);
-    //   } catch (e) {
-    //     console.error('내 정보 조회 실패', e);
-    //   }
-    // },
+    mapRoom(it) {
+      return {
+        id: it.roomId ?? it.chatRoomId ?? it.id,
+        title: it.name ?? it.roomName ?? it.title,
+        unreadCount: it.unreadCount ?? 0,
+        profile: it.profileUrl ?? null,
+        lastMessageAt: it.lastMessageAt ?? null,
+        lastMessageAtDisplay: formatTime(it.lastMessageAt),
+        lastMessagePreview: it.lastMessagePreview ?? null,
+        raw: it,
+      };
+    },
 
     async loadInitial() {
       this.loading = true;
       this.error = null;
 
       try {
-        const {items, next} = await fetchChats({
+        const { items, next } = await fetchChats({
           limit: this.pageSize,
           cursor: null,
         });
 
-        this.items = items.map((it) => ({
-          id: it.roomId ?? it.chatRoomId ?? it.id,
-          title: it.name ?? it.roomName ?? it.title,
-          unreadCount: it.unreadCount ?? 0,
-          profile: it.profileUrl ?? null,
-          lastMessageAt: it.lastMessageAt ?? null,
-          lastMessageAtDisplay: formatTime(it.lastMessageAt),
-          lastMessagePreview: it.lastMessagePreview ?? null,
-          raw: it,
-        }));
-
+        this.items = items.map(this.mapRoom);
         this.cursor = next;
 
         if (!this.hasNext && this.observer) {
@@ -142,22 +138,12 @@ export default {
       this.error = null;
 
       try {
-        const {items, next} = await fetchChats({
+        const { items, next } = await fetchChats({
           limit: this.pageSize,
           cursor: this.cursor,
         });
 
-        const mapped = items.map((it) => ({
-          id: it.roomId ?? it.chatRoomId ?? it.id,
-          title: it.name ?? it.roomName ?? it.title,
-          unreadCount: it.unreadCount ?? 0,
-          profile: it.profileUrl ?? null,
-          lastMessageAt: it.lastMessageAt ?? null,
-          lastMessageAtDisplay: formatTime(it.lastMessageAt),
-          lastMessagePreview: it.lastMessagePreview ?? null,
-          raw: it,
-        }));
-
+        const mapped = items.map(this.mapRoom);
         this.items = [...this.items, ...mapped];
         this.cursor = next;
 
@@ -183,8 +169,23 @@ export default {
       await this.loadInitial();
     },
 
+    scheduleRefresh() {
+      if (this.refreshTimer) {
+        clearTimeout(this.refreshTimer);
+      }
+
+      this.refreshTimer = setTimeout(() => {
+        this.refresh();
+        this.refreshTimer = null;
+      }, 150);
+    },
+
     async subscribeRoomSummary() {
       try {
+        if (this.summarySubscription) {
+          return;
+        }
+
         await connectWebSocket();
 
         const destination = `/user/api/sub/chat/summary`;
@@ -208,17 +209,21 @@ export default {
       const roomId = event?.roomId;
       if (!roomId) return;
 
-      const index = this.items.findIndex((item) => item.id === roomId);
+      const normalizedRoomId = String(roomId);
+      const index = this.items.findIndex((item) => String(item.id) === normalizedRoomId);
 
       if (index === -1) {
+        this.scheduleRefresh();
         return;
       }
 
       const existing = this.items[index];
+      const isActiveRoom =
+          this.activeRoomId != null && String(this.activeRoomId) === normalizedRoomId;
 
       const updated = {
         ...existing,
-        unreadCount: event.unreadCount ?? existing.unreadCount ?? 0,
+        unreadCount: isActiveRoom ? 0 : (event.unreadCount ?? existing.unreadCount ?? 0),
         lastMessagePreview: event.lastMessagePreview ?? existing.lastMessagePreview,
         lastMessageAt: event.lastMessageAt ?? existing.lastMessageAt,
         lastMessageAtDisplay: formatTime(event.lastMessageAt ?? existing.lastMessageAt),
