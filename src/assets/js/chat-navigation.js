@@ -4,6 +4,7 @@ export async function getOrCreateDmRoom(friendUuid) {
     if (!friendUuid) {
         throw new Error('상대 식별자가 없습니다.');
     }
+    console.log("getOrCreateDmRoom")
 
     const res = await api.get(`/v1/chat-room/${friendUuid}/register`);
 

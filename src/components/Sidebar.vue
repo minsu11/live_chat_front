@@ -49,6 +49,7 @@
       <ChatList
           v-else-if="currentView === 'chats'"
           :chats="chats"
+          :active-room-id="$route.params.roomId"
           @open-chat="$emit('open-chat', $event)"
       />
     </div>

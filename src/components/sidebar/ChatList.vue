@@ -63,9 +63,6 @@ export default {
     },
   },
   async mounted() {
-    await this.loadInitial();
-    await this.subscribeRoomSummary();
-
     this.observer = new IntersectionObserver((entries) => {
       if (entries[0].isIntersecting && this.hasNext && !this.loading) {
         this.loadMore();
@@ -73,9 +70,13 @@ export default {
     });
 
     this.observer.observe(this.$refs.sentinel);
+
+    await this.loadInitial();
+    await this.subscribeRoomSummary();
   },
   beforeUnmount() {
     if (this.observer) {
+      console.log("observer disconnect");
       this.observer.disconnect();
     }
 
@@ -162,7 +163,8 @@ export default {
       this.cursor = null;
       this.items = [];
 
-      if (this.observer) {
+      if (this.observer && this.$refs.sentinel) {
+        this.observer.unobserve(this.$refs.sentinel);
         this.observer.observe(this.$refs.sentinel);
       }
 

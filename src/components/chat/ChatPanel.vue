@@ -65,17 +65,11 @@ export default {
       roomId: '',
       loading: false,
       me: null,
-
       readTimer: null,
       pendingReadMessageId: null,
       pendingVisibleReadMessageId: null,
-      isReloadingMessages: false,
-
-      // readerUserId -> lastReadMessageId
-      lastReadByUser: {},
-      roomMemberCount: 0,
-
-      defaultImage: DefaultImage,
+      lastSentReadMessageId: null,
+      defaultImage: DefaultImage
     };
   },
 
@@ -123,29 +117,13 @@ export default {
       };
     },
 
-    async reloadRoomMessagesOnly(roomId) {
-      if (this.isReloadingMessages) return;
-      this.isReloadingMessages = true;
-      console.log("reloadRoomMessagesOnly", roomId);
-
-      try {
-        const res = await Api.get(`/v1/chat-room/${roomId}/messages`);
-        console.log("reload success")
-        const data = res?.data ?? res;
-
-        this.roomTitle = data?.title ?? '채팅방';
-        this.messages = (data?.messages ?? []).map(this.mapMessage);
-      } finally {
-        this.isReloadingMessages = false;
-      }
-    },
 
     async loadRoom(roomId) {
       if (!roomId) {
         this.roomTitle = '';
         this.messages = [];
         this.roomId = '';
-        this.lastReadByUser = {};
+        this.lastSentReadMessageId = null;
         this.cleanupSubscription();
         return;
       }
@@ -153,7 +131,7 @@ export default {
       try {
         this.loading = true;
         this.roomId = String(roomId);
-        this.lastReadByUser = {};
+        this.lastSentReadMessageId = null;
         this.pendingReadMessageId = null;
         this.pendingVisibleReadMessageId = null;
 
@@ -214,20 +192,19 @@ export default {
         });
 
         // 읽음 업데이트 구독
-        this.readUnsub = subscribe(`/user/api/sub/chat/rooms/${roomId}/read`, async (event) => {
+        this.readUnsub = subscribe(`/user/api/sub/chat/rooms/${roomId}/read`,  (event) => {
           console.log('READ_UPDATED 수신:', event);
-
+          console.log('본인: ', this.me?.uuid);
           if (String(this.roomId) !== String(roomId)) {
             return;
           }
 
-          await this.reloadRoomMessagesOnly(roomId);
+          this.applyReadUpdated(event);
         });
       } catch (e) {
         console.error('채팅방 로드 실패', e);
         this.roomTitle = '';
         this.messages = [];
-        this.lastReadByUser = {};
       } finally {
         this.loading = false;
       }
@@ -248,6 +225,16 @@ export default {
     },
 
     sendReadDebounced(roomId, messageId) {
+
+      if(!messageId) return;
+
+      if(
+          this.lastSentReadMessageId !=null &&
+          Number(messageId) <= Number(this.lastSentReadMessageId)
+      ){
+        return;
+      }
+
       this.pendingReadMessageId = messageId;
       console.log('pending read message id:', this.pendingReadMessageId);
 
@@ -256,15 +243,51 @@ export default {
       }
 
       this.readTimer = setTimeout(() => {
+        const targetMessageId = this.pendingReadMessageId;
+
+        if(!targetMessageId){
+          this.readTimer = null;
+          return;
+        }
+
+        if(
+            this.lastSentReadMessageId != null &&
+            Number(targetMessageId) <= Number(this.lastSentReadMessageId)
+        ){
+          this.readTimer = null;
+          return;
+        }
+
+
         sendMessage('/api/pub/chat/read', {
           roomId: Number(roomId),
           messageId: this.pendingReadMessageId,
         });
 
+        this.lastSentReadMessageId = targetMessageId;
         this.readTimer = null;
       }, 200);
     },
+    applyReadUpdated(event) {
+      console.log("apply read updated start");
+      console.log("event: ", event);
 
+      const updatedMap = new Map(
+          (event.updatedMessages ?? []).map((m) => [Number(m.messageId), m.unreadCount])
+      );
+
+      this.messages = this.messages.map((m) => {
+        const unreadCount = updatedMap.get(Number(m.id));
+        if (unreadCount == null) {
+          return m;
+        }
+
+        return {
+          ...m,
+          unreadCount,
+        };
+      });
+    },
     handleVisibilityChange() {
       if (document.visibilityState !== 'visible') {
         return;
