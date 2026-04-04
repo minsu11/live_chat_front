@@ -7,7 +7,7 @@
     <div v-else-if="friends.length > 0" class="friends">
       <FriendCard
           v-for="friend in friends"
-          :key="friend.userId"
+          :key="friend.uuid"
           :friend="friend"
           @remove="onRemoveFriend"
           @open-profile="$emit('open-profile', $event)"

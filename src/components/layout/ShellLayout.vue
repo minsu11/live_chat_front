@@ -8,6 +8,8 @@
           :me="me"
           @changeView="changeView"
           @openChat="openChat"
+          @group-room-created="handleGroupRoomCreated"
+          @toast="showToast"
       />
 
       <router-view/>
@@ -69,10 +71,9 @@ export default {
         alert('채팅방 이동 중 오류가 발생했습니다.');
       }
     },
-    sendMessage() {
-      if (!this.newMessage.trim()) return;
-      this.messages.push(this.newMessage);
-      this.newMessage = '';
+    async handleGroupRoomCreated(roomId) {
+      await this.loadChats();
+      await this.openChat(roomId);
     },
     onSearchFriend(keyword) {
       this.searchKeyword = keyword;
