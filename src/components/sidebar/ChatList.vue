@@ -6,7 +6,9 @@
       <li v-for="c in items" :key="c.id" class="list-li">
         <RoomCard
             :room="c"
-            @open-chat="payload => $emit('open-chat', { item: payload, type: 'chat' })"
+            @open-chat="payload => {
+              console.log('chat list open-chat', payload)
+              $emit('open-chat', { item: payload, type: 'chat' })}"
         />
       </li>
     </ul>

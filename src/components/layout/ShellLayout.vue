@@ -7,7 +7,7 @@
           :chats="chats"
           :me="me"
           @changeView="changeView"
-          @openChat="openChat"
+          @open-chat="openChat"
           @group-room-created="handleGroupRoomCreated"
           @toast="showToast"
       />
