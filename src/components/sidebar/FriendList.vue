@@ -9,6 +9,7 @@
           v-for="friend in friends"
           :key="friend.uuid"
           :friend="friend"
+          @open-chat="emit('open-chat',$event)"
           @remove="onRemoveFriend"
           @open-profile="$emit('open-profile', $event)"
       />
@@ -29,6 +30,16 @@ import FriendCard from './FriendCard.vue';
 export default {
   name: 'FriendList',
   components: { FriendCard },
+  props: {
+    friends: {
+      type: Array,
+      default: ()=>[]
+    },
+    keyword: {
+      type: String,
+      default: ''
+    }
+  },
   data() {
     return {
       friends: [],

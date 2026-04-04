@@ -10,26 +10,61 @@
       <div v-else-if="messages.length === 0" class="empty">아직 메시지가 없습니다.</div>
 
       <div
-          v-for="m in messages"
+          v-for="m in decoratedMessages"
           :key="m.id"
           class="msg"
-          :class="{ mine: m.mine }"
+          :class="{ mine: m.mine, compact: m.groupedTop }"
       >
-        <div v-if="!m.mine" class="avatar">
-          <img :src="m.profileImageUrl || defaultImage" alt="profile" />
+        <!-- 상대 메시지: 마지막 메시지일 때만 아바타 -->
+        <div v-if="!m.mine" class="avatar-slot">
+          <div v-if="m.showAvatar" class="avatar">
+            <img :src="m.profileImageUrl || defaultImage" alt="profile" />
+          </div>
         </div>
 
-        <div class="msg-body">
-          <div v-if="!m.mine" class="name">{{ m.name }}</div>
+        <div class="msg-body" :class="{ mine: m.mine }">
+          <!-- 상대 메시지: 묶음 첫 메시지일 때만 이름 -->
+          <div v-if="m.showName" class="name">{{ m.name }}</div>
 
-          <div class="bubble-wrap" :class="{ mine: m.mine }">
-            <div v-if="m.mine && m.unreadCount > 0" class="unread-mark">
-              {{ m.unreadCount }}
-            </div>
-            <div class="bubble">
-              <div class="text">{{ m.text }}</div>
+          <div class="message-row" :class="{ mine: m.mine }">
+            <!-- 내 메시지: unread/time을 버블 왼쪽 -->
+            <template v-if="m.mine && m.showMeta">
+              <transition name="unread-pop">
+                <div
+                    v-if="m.unreadCount > 0"
+                    :key="`u-${m.id}-${m.unreadCount}`"
+                    class="unread-mark left"
+                >
+                  {{ m.unreadCount }}
+                </div>
+              </transition>
               <div class="meta">{{ format(m.at) }}</div>
+            </template>
+
+            <div
+                class="bubble"
+                :class="{
+            mine: m.mine,
+            groupedTop: m.groupedTop,
+            groupedBottom: m.groupedBottom
+          }"
+            >
+              <div class="text">{{ m.text }}</div>
             </div>
+
+            <!-- 상대 메시지: unread/time을 버블 오른쪽 -->
+            <template v-if="!m.mine && m.showMeta">
+              <div class="meta">{{ format(m.at) }}</div>
+              <transition name="unread-pop">
+                <div
+                    v-if="m.unreadCount > 0"
+                    :key="`u-${m.id}-${m.unreadCount}`"
+                    class="unread-mark right"
+                >
+                  {{ m.unreadCount }}
+                </div>
+              </transition>
+            </template>
           </div>
         </div>
       </div>
@@ -73,6 +108,7 @@ export default {
     };
   },
 
+
   async mounted() {
     await this.loadMe();
     document.addEventListener('visibilitychange', this.handleVisibilityChange);
@@ -83,12 +119,28 @@ export default {
     currentRoomId() {
       return this.$route.params.roomId;
     },
+
+    decoratedMessages() {
+      return this.messages.map((m, index, arr) => {
+        const prev = arr[index - 1];
+        const next = arr[index + 1];
+
+        const samePrev = this.isSameGroup(prev, m);
+        const sameNext = this.isSameGroup(m, next);
+
+        return {
+          ...m,
+          groupedTop: samePrev,
+          groupedBottom: sameNext,
+          showName: !m.mine && !samePrev,
+          showAvatar: !m.mine && !sameNext,
+          showMeta: !sameNext,
+        };
+      });
+    },
   },
 
   watch: {
-    async currentRoomId(nextId) {
-      await this.loadRoom(nextId);
-    },
   },
 
   methods: {
@@ -101,6 +153,7 @@ export default {
         console.error('내 정보 조회 실패', e);
       }
     },
+
     mapMessage(m) {
       return {
         id: m.id ?? m.messageId,
@@ -117,6 +170,28 @@ export default {
       };
     },
 
+    isSameGroup(a, b) {
+      if (!a || !b) return false;
+      if (a.mine !== b.mine) return false;
+
+      const aSender = a.senderUserUuid ?? a.name;
+      const bSender = b.senderUserUuid ?? b.name;
+
+      if (aSender !== bSender) return false;
+
+      return this.isSameMinute(a.at, b.at);
+    },
+
+    isSameMinute(a, b) {
+      const da = new Date(a);
+      const db = new Date(b);
+
+      if (Number.isNaN(da.getTime()) || Number.isNaN(db.getTime())) {
+        return false;
+      }
+
+      return Math.abs(da.getTime() - db.getTime()) < 60 * 1000;
+    },
 
     async loadRoom(roomId) {
       if (!roomId) {
@@ -273,11 +348,15 @@ export default {
       console.log("event: ", event);
 
       const updatedMap = new Map(
-          (event.updatedMessages ?? []).map((m) => [Number(m.messageId), m.unreadCount])
+          (event.updatedMessages ?? []).map((m) => [
+            String(m.messageId),   // 🔥 문자열로 통일
+            m.unreadCount
+          ])
       );
 
       this.messages = this.messages.map((m) => {
-        const unreadCount = updatedMap.get(Number(m.id));
+        const unreadCount = updatedMap.get(String(m.id));
+        // console.log("unread count :", unreadCount)
         if (unreadCount == null) {
           return m;
         }
@@ -400,20 +479,27 @@ export default {
 
 .msg {
   display: flex;
-  align-items: flex-start;
+  align-items: flex-end;
   gap: 8px;
   margin: 10px 0;
+}
+
+.msg.compact {
+  margin-top: 2px;
 }
 
 .msg.mine {
   justify-content: flex-end;
 }
 
+.avatar-slot {
+  width: 34px;
+  flex-shrink: 0;
+}
+
 .avatar {
   width: 34px;
   height: 34px;
-  flex-shrink: 0;
-  margin-top: 2px;
 }
 
 .avatar img {
@@ -430,6 +516,10 @@ export default {
   max-width: 65%;
 }
 
+.msg-body.mine {
+  align-items: flex-end;
+}
+
 .name {
   font-size: 12px;
   color: #666;
@@ -437,25 +527,48 @@ export default {
   padding-left: 2px;
 }
 
+.message-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+}
+
+.message-row.mine {
+  justify-content: flex-end;
+}
+
 .bubble {
+  max-width: 260px;
   padding: 10px 12px;
   border-radius: 14px;
   background: #fff;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
 }
 
-.msg.mine .msg-body {
-  align-items: flex-end;
-}
-
-.msg.mine .bubble {
+.bubble.mine {
   background: #4dabf7;
   color: #fff;
   border-bottom-right-radius: 4px;
 }
 
-.msg:not(.mine) .bubble {
+.bubble:not(.mine) {
   border-bottom-left-radius: 4px;
+}
+
+.bubble.groupedTop:not(.mine) {
+  border-top-left-radius: 6px;
+}
+
+.bubble.groupedBottom:not(.mine) {
+  border-bottom-left-radius: 6px;
+}
+
+.bubble.mine.groupedTop {
+  border-top-right-radius: 6px;
+}
+
+.bubble.mine.groupedBottom {
+  border-bottom-right-radius: 6px;
 }
 
 .text {
@@ -466,9 +579,8 @@ export default {
 
 .meta {
   font-size: 11px;
-  opacity: 0.7;
-  margin-top: 4px;
-  text-align: right;
+  color: #868e96;
+  white-space: nowrap;
 }
 
 .composer {
@@ -501,28 +613,43 @@ export default {
   cursor: default;
 }
 
-.bubble-wrap {
-  display: flex;
-  align-items: flex-end;
-  gap: 6px;
-}
-
-.bubble-wrap.mine {
-  justify-content: flex-end;
-}
-
-.read-mark {
-  font-size: 11px;
-  color: #868e96;
-  white-space: nowrap;
-  margin-bottom: 4px;
-}
-
 .unread-mark {
   font-size: 12px;
   color: #f03e3e;
-  white-space: nowrap;
-  margin-bottom: 4px;
   font-weight: 600;
+  white-space: nowrap;
+}
+
+.unread-mark.left {
+  margin-right: 4px;
+}
+
+.unread-mark.right {
+  margin-left: 4px;
+}
+
+.unread-pop-enter-active {
+  animation: pop 0.2s ease;
+}
+
+.unread-pop-leave-active {
+  transition: all 0.18s ease;
+}
+
+.unread-pop-leave-to {
+  opacity: 0;
+  transform: scale(0.6);
+}
+
+@keyframes pop {
+  0% {
+    transform: scale(0.7);
+  }
+  50% {
+    transform: scale(1.15);
+  }
+  100% {
+    transform: scale(1);
+  }
 }
 </style>

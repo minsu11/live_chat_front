@@ -24,6 +24,7 @@ import Sidebar from '@/components/Sidebar.vue';
 import defaultProfile from '@/assets/default_image.png';
 import MenuDropdown from "@/components/MenuDropdown.vue";
 import api from "@/plugins/axios.js"
+import { fetchChats } from '@/assets/js/chats.js';
 import { openExistingChat } from '@/assets/js/chat-navigation.js';
 
 export default {
@@ -33,15 +34,14 @@ export default {
     return {
       currentView: 'friends',
       defaultProfile,
+      chats: [],
       selectedChat: '',
-      messages: [],
-      newMessage: '',
       me: null // 내 프로필 상태
     };
   },
   async created(){
     this.me = await api.get("v1/users/me/profile/summary")
-
+    await this.loadChats();
     console.log("create me")
     console.log(this.me)
 
@@ -51,27 +51,37 @@ export default {
       this.currentView = view;
     },
     async openChat(payload) {
-      // DM이면 '방 보장(ensure)' API 호출 후 roomId 받아서 라우팅하는 패턴 권장
-      // const { data } = await api.post('/v1/chat-rooms/ensure', { friendUuid: item.uuid });
-      // const roomId = data.roomId;
       try {
-        const room = payload?.item;
-        const roomId = room?.id;
-        console.log("room: ",room);
+        let roomId;
+
+        // 그룹 생성에서 온 경우
+        if (typeof payload === 'number') {
+          roomId = payload;
+        }
+
+        // 기존 채팅 클릭
+        else if (payload?.item) {
+          roomId = payload.item.id;
+        }
 
         if (!roomId) {
-          alert('채팅방 정보가 없습니다.');
+          alert('채팅방 정보 없음');
           return;
         }
 
-        await openExistingChat(this.$router, roomId);
-        room.unreadCount = 0;
+        // 🔥 핵심
+        await openExistingChat(this.$router, roomId); // 이미 util 있음 :contentReference[oaicite:0]{index=0}
+
       } catch (e) {
         console.error(e);
-        alert('채팅방 이동 중 오류가 발생했습니다.');
       }
     },
+    async loadChats() {
+      const { items } = await fetchChats()
+      this.chats = items
+    },
     async handleGroupRoomCreated(roomId) {
+      console.log("handleGroupRoomCreated start");
       await this.loadChats();
       await this.openChat(roomId);
     },

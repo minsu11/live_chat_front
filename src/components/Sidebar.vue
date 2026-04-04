@@ -3,7 +3,7 @@
     <h2 class="logo">ChatOn</h2>
 
     <!-- 내 프로필 -->
-    <div class="my-profile" @click="openMyProfile()">
+    <div class="my-profile" @click="openMyProfile">
       <img :src="me?.profileUrl || defaultProfile" class="avatar" alt="" />
       <div class="info">
         <div class="name">{{ me?.nickName || '나' }}</div>
@@ -11,11 +11,12 @@
       </div>
     </div>
 
+    <!-- 메뉴 버튼 -->
     <div class="menu-buttons">
       <v-btn
           small
           rounded
-          :color="currentView==='friends' ? '#4dabf7' : '#f1f3f5'"
+          :color="currentView === 'friends' ? '#4dabf7' : '#f1f3f5'"
           class="menu-btn"
           @click="$emit('changeView', 'friends')"
       >
@@ -25,7 +26,7 @@
       <v-btn
           small
           rounded
-          :color="currentView==='chats' ? '#38d9a9' : '#f1f3f5'"
+          :color="currentView === 'chats' ? '#38d9a9' : '#f1f3f5'"
           class="menu-btn"
           @click="$emit('changeView', 'chats')"
       >
@@ -33,7 +34,7 @@
       </v-btn>
     </div>
 
-    <!-- 검색 -->
+    <!-- 친구 검색 -->
     <div v-if="currentView === 'friends'" class="search-box">
       <v-text-field
           v-model="kwProxy"
@@ -69,6 +70,7 @@
           :keyword="kw"
           @open-chat="$emit('open-chat', $event)"
           @open-profile="openProfile"
+          @remove-friend="handleRemoveFriend"
       />
 
       <ChatList
@@ -102,11 +104,12 @@
 <script>
 import ChatList from '@/components/sidebar/ChatList.vue';
 import SearchResults from '@/components/search/SearchResults.vue';
-import FriendList from "@/components/sidebar/FriendList.vue";
-import ProfileModal from "@/components/sidebar/ProfileModal.vue";
-import GroupChatCreateModal from "@/components/sidebar/GroupChatCreateModal.vue";
+import FriendList from '@/components/sidebar/FriendList.vue';
+import ProfileModal from '@/components/sidebar/ProfileModal.vue';
+import GroupChatCreateModal from '@/components/sidebar/GroupChatCreateModal.vue';
 import defaultProfile from '@/assets/default_image.png';
 import api from '@/plugins/axios.js';
+import { getFriends } from '@/assets/js/friend.js';
 
 export default {
   name: 'Sidebar',
@@ -118,19 +121,38 @@ export default {
     GroupChatCreateModal
   },
   props: {
-    currentView: { type: String, default: 'friends' },
-    friends: { type: Array, default: () => [] },
-    chats: { type: Array, default: () => [] },
-    me: { type: Object, default: () => ({}) }
+    currentView: {
+      type: String,
+      default: 'friends'
+    },
+    chats: {
+      type: Array,
+      default: () => []
+    },
+    me: {
+      type: Object,
+      default: () => ({})
+    }
   },
   data() {
     return {
       searchKeyword: '',
       selectedProfile: null,
       defaultProfile,
+
+      // 친구 목록 source of truth
+      friends: [],
+      nextFriendCursor: null,
+      hasNextFriends: false,
+      loadingFriends: false,
+
+      // 그룹 채팅 생성 모달
       showGroupCreateModal: false,
       isCreatingGroupChat: false
     };
+  },
+  async mounted() {
+    await this.loadFriends();
   },
   computed: {
     kwProxy: {
@@ -149,7 +171,27 @@ export default {
     }
   },
   methods: {
+    async loadFriends() {
+      try {
+        this.loadingFriends = true;
+
+        const {items, next, hasNext} = await getFriends({limit: 50});
+
+        this.friends = items;
+        this.nextFriendCursor = next;
+        this.hasNextFriends = hasNext;
+
+        console.log('friends loaded:', this.friends);
+      } catch (e) {
+        console.error('친구 목록 조회 실패', e);
+        this.$emit('toast', '친구 목록을 불러오지 못했어요');
+      } finally {
+        this.loadingFriends = false;
+      }
+    },
+
     openCreateGroupModal() {
+      console.log('sidebar friends:', this.friends);
       this.showGroupCreateModal = true;
     },
 
@@ -157,7 +199,7 @@ export default {
       this.showGroupCreateModal = false;
     },
 
-    async handleCreateGroupChat({ title, memberUuids }) {
+    async handleCreateGroupChat({title, memberUuids}) {
       try {
         this.isCreatingGroupChat = true;
 
@@ -168,14 +210,17 @@ export default {
 
         this.showGroupCreateModal = false;
 
-        // 네 axios wrapper 구조에 따라 res.data일 수도 있음
+        // axios wrapper 형태 대응
         const roomId = res?.data?.roomId ?? res?.roomId;
 
         this.$emit('group-room-created', roomId);
         this.$emit('toast', '그룹 채팅방이 생성되었어요');
       } catch (e) {
         console.error('그룹 채팅방 생성 실패', e);
-        this.$emit('toast', e?.response?.data?.message ?? '그룹 채팅방 생성에 실패했어요');
+        this.$emit(
+            'toast',
+            e?.response?.data?.message ?? '그룹 채팅방 생성에 실패했어요'
+        );
       } finally {
         this.isCreatingGroupChat = false;
       }
@@ -183,9 +228,12 @@ export default {
 
     async addFriend(user) {
       try {
-        await api.post('/v1/friends/register', { targetUserId: user.userId });
+        await api.post('/v1/friends/register', {targetUserId: user.userId});
         this.$emit('toast', `${user.name} 님을 친구로 추가했어요`);
         this.searchKeyword = '';
+
+        // 친구 추가 후 목록 재조회
+        await this.loadFriends();
       } catch (e) {
         console.error(e);
         this.$emit('toast', '친구 추가에 실패했어요 🥲');
@@ -193,31 +241,49 @@ export default {
     },
 
     async openProfile(user) {
-      const userId = user.uuid;
-      user = await api.get(`/v1/users/${userId}/profile/detail`);
-      user.uuid = userId;
-      this.selectedProfile = { ...user, isMe: false };
+      try {
+        const userId = user.uuid;
+        const profile = await api.get(`/v1/users/${userId}/profile/detail`);
+
+        profile.uuid = userId;
+        this.selectedProfile = {...profile, isMe: false};
+      } catch (e) {
+        console.error('프로필 조회 실패', e);
+        this.$emit('toast', '프로필을 불러오지 못했어요');
+      }
     },
 
     async openMyProfile() {
-      const user = await api.get("/v1/users/me/profile/detail");
-      this.selectedProfile = { ...user, isMe: true };
+      try {
+        const user = await api.get('/v1/users/me/profile/detail');
+        this.selectedProfile = {...user, isMe: true};
+      } catch (e) {
+        console.error('내 프로필 조회 실패', e);
+        this.$emit('toast', '내 프로필을 불러오지 못했어요');
+      }
     },
 
     closeProfile() {
       this.selectedProfile = null;
     },
 
-    async handleUpdateProfile({ name, message, file }) {
+    async handleUpdateProfile({name, message, file}) {
       try {
         if (this.me.nickName !== name || this.me.statusMessage !== message) {
-          const profile = { name, message };
+          const profile = {
+            name,
+            message
+          };
+
           const res = await api.post('/v1/users/me/profile', profile);
 
           this.me.nickName = res.nickName;
           this.me.statusMessage = res.message;
-          this.selectedProfile.nickName = res.nickName;
-          this.selectedProfile.message = res.message;
+
+          if (this.selectedProfile) {
+            this.selectedProfile.nickName = res.nickName;
+            this.selectedProfile.message = res.message;
+          }
         }
 
         if (file instanceof File) {
@@ -226,16 +292,27 @@ export default {
 
           const imageRes = await api.post('/v1/users/me/profile/image', formData, {
             headers: {
-              'Content-Type': 'multipart/form-data',
+              'Content-Type': 'multipart/form-data'
             }
           });
 
           this.me.profileUrl = imageRes.profileUrl;
-          this.selectedProfile.profileUrl = imageRes.profileUrl;
+
+          if (this.selectedProfile) {
+            this.selectedProfile.profileUrl = imageRes.profileUrl;
+          }
         }
       } catch (err) {
         console.error('프로필 수정 실패', err);
+        this.$emit('toast', '프로필 수정에 실패했어요');
       }
+    },
+
+    async handleRemoveFriend(friendId) {
+      console.log('remove friend:', friendId);
+      // 필요하면 여기서 친구 삭제 API 호출 후 loadFriends() 다시 호출
+      // await api.delete(...)
+      // await this.loadFriends();
     }
   }
 };
@@ -247,6 +324,7 @@ export default {
   flex-direction: column;
   width: 300px;
   border-right: 1px solid #e9ecef;
+  background: #fff;
 }
 
 .logo {
@@ -274,6 +352,7 @@ export default {
   height: 40px;
   border-radius: 50%;
   margin-right: 10px;
+  object-fit: cover;
 }
 
 .info {
@@ -295,6 +374,11 @@ export default {
   gap: 8px;
   justify-content: center;
   margin-bottom: 10px;
+  padding: 0 10px;
+}
+
+.menu-btn {
+  min-width: 100px;
 }
 
 .search-box {
@@ -305,10 +389,7 @@ export default {
 .search-input {
   font-size: 13px;
   margin: 10px;
-  padding: 8px;
   width: calc(100% - 20px);
-  border: 1px solid #e9ecef;
-  border-radius: 8px;
 }
 
 .chat-header {
@@ -334,6 +415,7 @@ export default {
   font-size: 20px;
   font-weight: bold;
   cursor: pointer;
+  line-height: 1;
 }
 
 .chat-create-btn:hover {
