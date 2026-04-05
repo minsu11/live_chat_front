@@ -141,6 +141,13 @@ export default {
   },
 
   watch: {
+    async currentRoomId(newRoomId, oldRoomId) {
+      if (String(newRoomId) === String(oldRoomId)) {
+        return;
+      }
+
+      await this.loadRoom(newRoomId);
+    }
   },
 
   methods: {
@@ -203,34 +210,34 @@ export default {
         return;
       }
 
+      const nextRoomId = String(roomId);
+
       try {
         this.loading = true;
-        this.roomId = String(roomId);
         this.lastSentReadMessageId = null;
         this.pendingReadMessageId = null;
         this.pendingVisibleReadMessageId = null;
 
-        this.cleanupSubscription();
-
-        const res = await Api.get(`/v1/chat-room/${roomId}/enter`);
+        const res = await Api.get(`/v1/chat-room/${nextRoomId}/enter`);
         const data = res;
 
-        console.log('enter response:', data);
+        // 여기서 다른 방으로 또 이동했으면 버림
+        if (String(this.currentRoomId) !== nextRoomId) {
+          return;
+        }
 
+        // 이 시점에 실제 전환
+        this.cleanupSubscription();
+
+        this.roomId = nextRoomId;
         this.roomTitle = data?.title ?? '채팅방';
-
         this.messages = (data?.messages ?? []).map(this.mapMessage);
-
-        console.log("sender uuid: ", this.messages);
 
         await this.$nextTick();
         this.scrollToBottom();
 
-        await connectWebSocket();
-
-        // 메시지 구독
-        this.unsub = subscribe(`/user/api/sub/chat/rooms/${roomId}`, (msg) => {
-          console.log('실시간 메시지 수신:', msg);
+        this.unsub = subscribe(`/user/api/sub/chat/rooms/${nextRoomId}`, (msg) => {
+          if (String(this.roomId) !== nextRoomId) return;
 
           const mine = msg.sender?.mine ?? msg.mine ?? false;
           const messageId = msg.messageId ?? Date.now();
@@ -248,38 +255,22 @@ export default {
 
           this.$nextTick(() => this.scrollToBottom());
 
-          // 내가 보낸 메시지는 서버에서 이미 sender read 처리됨
-          if (mine) {
-            return;
-          }
-
-          // 현재 room이 맞고, 탭이 visible이면 read 전송
-          if (String(this.roomId) !== String(roomId)) {
-            return;
-          }
-
+          if (mine) return;
           if (document.visibilityState !== 'visible') {
             this.pendingVisibleReadMessageId = messageId;
             return;
           }
 
-          this.sendReadDebounced(roomId, messageId);
+          this.sendReadDebounced(nextRoomId, messageId);
         });
 
-        // 읽음 업데이트 구독
-        this.readUnsub = subscribe(`/user/api/sub/chat/rooms/${roomId}/read`,  (event) => {
-          console.log('READ_UPDATED 수신:', event);
-          console.log('본인: ', this.me?.uuid);
-          if (String(this.roomId) !== String(roomId)) {
-            return;
-          }
-
+        this.readUnsub = subscribe(`/user/api/sub/chat/rooms/${nextRoomId}/read`, (event) => {
+          if (String(this.roomId) !== nextRoomId) return;
           this.applyReadUpdated(event);
         });
+
       } catch (e) {
         console.error('채팅방 로드 실패', e);
-        this.roomTitle = '';
-        this.messages = [];
       } finally {
         this.loading = false;
       }
