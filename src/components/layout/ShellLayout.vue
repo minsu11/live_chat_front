@@ -82,7 +82,6 @@ export default {
     },
     async handleGroupRoomCreated(roomId) {
       console.log("handleGroupRoomCreated start");
-      await this.loadChats();
       await this.openChat(roomId);
     },
     onSearchFriend(keyword) {

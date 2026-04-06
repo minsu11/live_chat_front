@@ -7,8 +7,7 @@
         <span class="time" v-if="room.lastMessageAtDisplay">{{ room.lastMessageAtDisplay }}</span>
       </div>
       <div class="preview" v-if="room.lastMessagePreview">{{ room.lastMessagePreview }}</div>
-      <div class="unread-count">{{room.unreadCount}}</div>
-    </div>
+      <div v-if="room.unreadCount > 0" class="unread-count">{{ room.unreadCount }}</div>    </div>
   </div>
 </template>
 
