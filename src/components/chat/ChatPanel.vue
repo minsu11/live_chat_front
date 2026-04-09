@@ -50,6 +50,12 @@
           }"
             >
               <div v-if="m.type === 'EMOJI'" class="emoji-text">{{ m.text }}</div>
+              <img
+                v-else-if="m.type === 'IMAGE'"
+                :src="m.text"
+                alt="chat-image"
+                class="chat-image"
+              />
               <div v-else class="text">{{ m.text }}</div>
             </div>
 
@@ -84,14 +90,24 @@
         </button>
       </div>
 
+
       <div class="composer">
         <button type="button" class="emoji-toggle" @click="toggleEmojiPicker">😊</button>
+        <button type="button" class="image-toggle" @click="openImagePicker">🖼️</button>
 
         <input
             v-model="draft"
             class="input"
             placeholder="메시지를 입력하세요"
             @keyup.enter="send"
+        />
+
+        <input
+            ref="imageInput"
+            type="file"
+            accept="image/*"
+            style="display: none"
+            @change="handleImageSelected"
         />
 
         <button class="send" :disabled="!draft.trim()" @click="send">전송</button>
@@ -105,6 +121,7 @@ import Api from '@/plugins/axios.js';
 import { subscribe, sendMessage } from '@/services/ws-client.js';
 import emojiRegex  from "emoji-regex";
 import DefaultImage from '@/assets/default_image.png';
+import {uploadChatImage} from "@/assets/js/chat-file.js";
 
 export default {
   name: 'ChatPanel',
@@ -444,6 +461,30 @@ export default {
         this.readUnsub = null;
       }
     },
+    openImagePicker() {
+      this.$refs.imageInput?.click();
+    },
+
+    async handleImageSelected(event) {
+      const file = event.target.files?.[0];
+      if (!file || !this.roomId) return;
+
+      try {
+        const uploaded = await uploadChatImage(file);
+
+        sendMessage('/api/pub/chat/message', {
+          roomId: Number(this.roomId),
+          messageType: 'IMAGE',
+          messageContent: uploaded.fileUrl,
+        });
+      } catch (e) {
+        console.error('채팅 이미지 업로드 실패', e);
+      } finally {
+        if (this.$refs.imageInput) {
+          this.$refs.imageInput.value = '';
+        }
+      }
+    },
     scrollToBottom() {
       const el = this.$refs.list;
       if (!el) return;
@@ -739,5 +780,23 @@ export default {
   font-size: 32px;
   line-height: 1.2;
   white-space: pre-wrap;
+}
+
+.chat-image {
+  display: block;
+  max-width: 220px;
+  max-height: 280px;
+  border-radius: 12px;
+  object-fit: cover;
+  cursor: pointer;
+}
+
+.image-toggle {
+  border: none;
+  border-radius: 8px;
+  padding: 0 10px;
+  background: #f1f3f5;
+  cursor: pointer;
+  font-size: 18px;
 }
 </style>
