@@ -4,7 +4,7 @@ import SockJS from 'sockjs-client';
 
 let stompClient = null;
 let connectPromise = null;
-let subscriptions = [];
+const subscriptionMap = new Map();
 
 export function connectWebSocket() {
     if (stompClient?.connected) {
@@ -23,14 +23,12 @@ export function connectWebSocket() {
         const safeResolve = (value) => {
             if (settled) return;
             settled = true;
-            connectPromise = null;
             resolve(value);
         };
 
         const safeReject = (error) => {
             if (settled) return;
             settled = true;
-            connectPromise = null;
             reject(error);
         };
 
@@ -40,7 +38,6 @@ export function connectWebSocket() {
             const res = await api.get('/ws/token');
             console.log('ws token response=', res);
 
-            // 네 axios 플러그인 구조에 따라 둘 중 하나 선택
             const accessToken = typeof res === 'string' ? res : res?.data;
 
             if (!accessToken) {
@@ -55,10 +52,10 @@ export function connectWebSocket() {
                 connectHeaders: {
                     Authorization: `Bearer ${accessToken}`,
                 },
-                reconnectDelay: 0,
+                reconnectDelay: 3000,
 
-                onConnect: (frame) => {
-                    console.log('✅ WebSocket connected', frame);
+                onConnect: () => {
+                    console.log('✅ WebSocket connected');
                     safeResolve(stompClient);
                 },
 
@@ -75,9 +72,9 @@ export function connectWebSocket() {
                 onWebSocketClose: (event) => {
                     console.warn('🔌 WebSocket closed:', event);
                     // 연결 성공 전에 닫힌 경우만 reject
-                    if (!stompClient?.connected) {
-                        safeReject(event);
-                    }
+                    // if (!stompClient?.connected) {
+                    //     safeReject(event);
+                    // }
                 },
             });
 
@@ -91,28 +88,46 @@ export function connectWebSocket() {
         } catch (e) {
             console.error('❌ connectWebSocket 실패', e);
             safeReject(e);
+        }finally {
+            connectPromise = null;
         }
     });
 
     return connectPromise;
 }
 
-export function subscribe(destination, callback) {
+export async function subscribe(destination, callback, options = {}) {
+    await  connectWebSocket();
     console.log('📡 subscribe 시도:', destination, 'connected=', stompClient?.connected);
+    const { key = destination, replace = true } = options;
 
     if (!stompClient || !stompClient.connected) {
         console.warn('WebSocket이 연결되지 않아 구독 실패:', destination);
         return null;
     }
-
-    const sub = stompClient.subscribe(destination, (message) => {
+    if (replace && subscriptionMap.has(key)) {
+        const oldSub = subscriptionMap.get(key);
+        oldSub?.unsubscribe?.();
+        subscriptionMap.delete(key);
+    }
+    const rawSub = stompClient.subscribe(destination, (message) => {
         const data = JSON.parse(message.body);
         console.log('📥 실시간 메시지 수신:', destination, data);
         callback(data);
     });
 
-    subscriptions.push(sub);
-    return sub;
+    const wrappedSub = {
+        unsubscribe() {
+            rawSub.unsubscribe();
+            if (subscriptionMap.get(key) === wrappedSub) {
+                subscriptionMap.delete(key);
+            }
+        }
+    }
+
+    subscriptionMap.set(key, wrappedSub);
+
+    return wrappedSub;
 }
 
 export function sendMessage(destination, payload) {
@@ -130,11 +145,22 @@ export function sendMessage(destination, payload) {
     });
 }
 
+export function unsubscribeByKey(key){
+    const sub = subscriptionMap.get(key);
+
+    if(!sub) return;
+
+    sub.unsubscribe();
+    subscriptionMap.delete(key);
+}
+
 export function disconnectWebSocket() {
+    subscriptionMap.forEach((sub) => sub?.unsubscribe?.());
+    subscriptionMap.clear();
     if (stompClient) {
         stompClient.deactivate();
         stompClient = null;
-        connectPromise = null;
         console.log('🔌 WebSocket disconnected');
     }
+    connectPromise = null;
 }

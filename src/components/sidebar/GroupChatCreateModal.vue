@@ -62,6 +62,7 @@
 
 <script>
 import defaultProfile from '@/assets/default_image.png';
+import {no} from "vuetify/locale";
 
 export default {
   props: {
@@ -109,13 +110,11 @@ export default {
       return this.selected.includes(uuid)
     },
 
-    autoTitle() {
-      return this.selectedFriends.map(f => f.name).join(', ')
-    },
 
     submit() {
+      const normalizedTitle = this.title?.trim();
       this.$emit('submit', {
-        title: this.title || this.autoTitle(),
+        title: normalizedTitle ? normalizedTitle : null,
         memberUuids: this.selected
       })
     }

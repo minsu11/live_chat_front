@@ -144,26 +144,17 @@ export default {
         id: it.roomId ?? it.chatRoomId ?? it.id,
         title: it.name ?? it.roomName ?? it.title ?? it.displayName ?? '채팅방',
         unreadCount: it.unreadCount ?? 0,
-        profile: it.profileUrl ?? null,
+        profile: it.profileUrl ?? it.profile ?? null,
         lastMessageAt: it.lastMessageAt ?? null,
         orderAt: it.orderAt ?? it.lastMessageAt ?? null,
         lastMessageAtDisplay: formatTime(it.lastMessageAt),
-        lastMessagePreview: it.lastMessagePreview ?? null,
+        lastMessagePreview:
+            it.lastMessagePreview
+            ?? it.preview
+            ?? it.lastPreview
+            ?? it.lastMessage
+            ?? null,
         raw: it,
-      };
-    },
-
-    mapChatListUpsertEvent(event) {
-      return {
-        id: event.roomId,
-        title: event.displayName ?? '채팅방',
-        unreadCount: event.unreadCount ?? 0,
-        profile: null,
-        lastMessageAt: event.lastMessageAt ?? null,
-        orderAt: event.orderAt ?? event.lastMessageAt ?? null,
-        lastMessageAtDisplay: formatTime(event.lastMessageAt),
-        lastMessagePreview: null,
-        raw: event,
       };
     },
 
@@ -241,7 +232,6 @@ export default {
 
         const mapped = items.map(this.mapRoom);
 
-        // 기존 데이터와 합칠 때도 roomId 기준 dedupe
         const mergedMap = new Map(this.items.map(item => [String(item.id), item]));
         mapped.forEach(item => {
           mergedMap.set(String(item.id), {
@@ -264,49 +254,19 @@ export default {
       }
     },
 
-    async refresh() {
-      this.cursor = null;
-      this.items = [];
-
-      if (this.observer && this.$refs.sentinel) {
-        this.observer.unobserve(this.$refs.sentinel);
-        this.observer.observe(this.$refs.sentinel);
-      }
-
-      await this.loadInitial();
-    },
-
-    scheduleRefresh() {
-      if (this.refreshTimer) {
-        clearTimeout(this.refreshTimer);
-      }
-
-      this.refreshTimer = setTimeout(() => {
-        this.refresh();
-        this.refreshTimer = null;
-      }, 150);
-    },
-
     async subscribeChatListEvents() {
       try {
         await connectWebSocket();
 
-        if (!this.summarySubscription) {
-          const summaryDestination = `/user/api/sub/chat/summary`;
-          this.summarySubscription = subscribe(summaryDestination, (event) => {
-            this.applySummaryEvent(event);
-          });
-
-          if (this.summarySubscription) {
-            console.log('summary 구독 완료:', summaryDestination);
-          }
-        }
-
         if (!this.chatListUpsertSubscription) {
           const chatListDestination = `/user/api/sub/chat-list`;
-          this.chatListUpsertSubscription = subscribe(chatListDestination, (event) => {
+          this.chatListUpsertSubscription = await subscribe(
+              chatListDestination,
+              (event) => {
             this.applyChatListUpsertEvent(event);
-          });
+          },
+              {key: 'chat-list', replace: true },
+          );
 
           if (this.chatListUpsertSubscription) {
             console.log('chat-list upsert 구독 완료:', chatListDestination);
@@ -317,40 +277,34 @@ export default {
       }
     },
 
-    applySummaryEvent(event) {
-      const roomId = event?.roomId;
-      if (!roomId) return;
+    applyChatListUpsertEvent(event) {
+      if (!event?.roomId) return;
+      const normalizedRoomId = String(event.roomId);
+      const existing = this.items.find(item => String(item.id) === normalizedRoomId);
 
-      const normalizedRoomId = String(roomId);
-      const index = this.items.findIndex((item) => String(item.id) === normalizedRoomId);
-
-      if (index === -1) {
-        // 아직 목록에 없는 방이면 서버/이벤트 반영 타이밍 차이일 수 있으니 재조회 fallback
-        this.scheduleRefresh();
-        return;
-      }
-
-      const existing = this.items[index];
       const isActiveRoom =
           this.activeRoomId != null && String(this.activeRoomId) === normalizedRoomId;
 
       const updated = {
-        ...existing,
-        unreadCount: isActiveRoom ? 0 : (event.unreadCount ?? existing.unreadCount ?? 0),
-        lastMessagePreview: event.lastMessagePreview ?? existing.lastMessagePreview,
-        lastMessageAt: event.lastMessageAt ?? existing.lastMessageAt,
-        orderAt: event.lastMessageAt ?? existing.orderAt ?? existing.lastMessageAt,
-        lastMessageAtDisplay: formatTime(event.lastMessageAt ?? existing.lastMessageAt),
+        id: event.roomId,
+        title: event.displayName ?? existing?.title ?? '채팅방',
+        unreadCount: isActiveRoom ? 0 : (event.unreadCount ?? existing?.unreadCount ?? 0),
+        profile: event.profileUrl ?? existing?.profile ?? null,
+        lastMessageAt: event.lastMessageAt ?? existing?.lastMessageAt ?? null,
+        orderAt: event.orderAt ?? event.lastMessageAt ?? existing?.orderAt ?? existing?.lastMessageAt ?? null,
+        lastMessageAtDisplay: formatTime(event.lastMessageAt ?? existing?.lastMessageAt),
+        lastMessagePreview:
+            event.lastMessagePreview
+            ?? event.preview
+            ?? existing?.lastMessagePreview
+            ?? null,
+        raw: {
+          ...(existing?.raw ?? {}),
+          ...event,
+        },
       };
 
       this.upsertRoom(updated);
-    },
-
-    applyChatListUpsertEvent(event) {
-      if (!event?.roomId) return;
-
-      const room = this.mapChatListUpsertEvent(event);
-      this.upsertRoom(room);
     },
   },
 };

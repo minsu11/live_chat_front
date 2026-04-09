@@ -49,7 +49,8 @@
             groupedBottom: m.groupedBottom
           }"
             >
-              <div class="text">{{ m.text }}</div>
+              <div v-if="m.type === 'EMOJI'" class="emoji-text">{{ m.text }}</div>
+              <div v-else class="text">{{ m.text }}</div>
             </div>
 
             <!-- 상대 메시지: unread/time을 버블 오른쪽 -->
@@ -70,21 +71,39 @@
       </div>
     </section>
 
-    <footer class="composer">
-      <input
-          v-model="draft"
-          class="input"
-          placeholder="메시지를 입력하세요"
-          @keyup.enter="send"
-      />
-      <button class="send" :disabled="!draft.trim()" @click="send">전송</button>
+    <footer class="composer-wrap">
+      <div v-if="showEmojiPicker" class="emoji-picker">
+        <button
+            v-for="emoji in emojiList"
+            :key="emoji"
+            type="button"
+            class="emoji-btn"
+            @click="pickEmoji(emoji)"
+        >
+          {{ emoji }}
+        </button>
+      </div>
+
+      <div class="composer">
+        <button type="button" class="emoji-toggle" @click="toggleEmojiPicker">😊</button>
+
+        <input
+            v-model="draft"
+            class="input"
+            placeholder="메시지를 입력하세요"
+            @keyup.enter="send"
+        />
+
+        <button class="send" :disabled="!draft.trim()" @click="send">전송</button>
+      </div>
     </footer>
   </div>
 </template>
 
 <script>
 import Api from '@/plugins/axios.js';
-import { connectWebSocket, subscribe, sendMessage } from '@/services/ws-client.js';
+import { subscribe, sendMessage } from '@/services/ws-client.js';
+import emojiRegex  from "emoji-regex";
 import DefaultImage from '@/assets/default_image.png';
 
 export default {
@@ -104,7 +123,9 @@ export default {
       pendingReadMessageId: null,
       pendingVisibleReadMessageId: null,
       lastSentReadMessageId: null,
-      defaultImage: DefaultImage
+      defaultImage: DefaultImage,
+      showEmojiPicker: false,
+      emojiList: ['😀', '😂', '👍', '❤️', '😭', '🎉', '🔥', '🥹'],
     };
   },
 
@@ -125,8 +146,8 @@ export default {
         const prev = arr[index - 1];
         const next = arr[index + 1];
 
-        const samePrev = this.isSameGroup(prev, m);
-        const sameNext = this.isSameGroup(m, next);
+        const samePrev = this.isSameVisualGroup(prev, m);
+        const sameNext = this.isSameVisualGroup(m, next);
 
         return {
           ...m,
@@ -145,7 +166,6 @@ export default {
       if (String(newRoomId) === String(oldRoomId)) {
         return;
       }
-
       await this.loadRoom(newRoomId);
     }
   },
@@ -155,7 +175,6 @@ export default {
       try {
         const res = await Api.get('/v1/users/me/profile/summary');
         this.me = res?.data ?? res;
-        console.log("me: ", this.me);
       } catch (e) {
         console.error('내 정보 조회 실패', e);
       }
@@ -164,12 +183,13 @@ export default {
     mapMessage(m) {
       return {
         id: m.id ?? m.messageId,
+        type: m.messageType ?? m.type ?? 'TEXT',
         name: m.senderNickname ?? m.sender?.senderNickname ?? '',
         text: m.content ?? m.text ?? '',
         at: m.createdAt ?? m.at ?? new Date().toISOString(),
         mine: m.mine ?? false,
         unreadCount: m.unreadCount ?? 0,
-        senderUserUuid: m.sender?.senderUuid ?? m.senderUserUuid ?? null,
+        senderUuid: m.sender?.senderUuid ?? m.senderUserUuid ?? null,
         profileImageUrl:
             m.profileImageUrl ??
             m.sender?.profileImageUrl ??
@@ -181,12 +201,18 @@ export default {
       if (!a || !b) return false;
       if (a.mine !== b.mine) return false;
 
-      const aSender = a.senderUserUuid ?? a.name;
-      const bSender = b.senderUserUuid ?? b.name;
+      const aSender = a.senderUuid ?? a.name;
+      const bSender = b.senderUuid ?? b.name;
 
       if (aSender !== bSender) return false;
 
       return this.isSameMinute(a.at, b.at);
+    },
+
+    isSameVisualGroup(a, b) {
+      if (!this.isSameGroup(a, b)) return false;
+
+      return Number(a.unreadCount ?? 0) === Number(b.unreadCount ?? 0);
     },
 
     isSameMinute(a, b) {
@@ -221,12 +247,10 @@ export default {
         const res = await Api.get(`/v1/chat-room/${nextRoomId}/enter`);
         const data = res;
 
-        // 여기서 다른 방으로 또 이동했으면 버림
         if (String(this.currentRoomId) !== nextRoomId) {
           return;
         }
 
-        // 이 시점에 실제 전환
         this.cleanupSubscription();
 
         this.roomId = nextRoomId;
@@ -236,20 +260,25 @@ export default {
         await this.$nextTick();
         this.scrollToBottom();
 
-        this.unsub = subscribe(`/user/api/sub/chat/rooms/${nextRoomId}`, (msg) => {
+        this.unsub = await subscribe(`/user/api/sub/chat/rooms/${nextRoomId}`,
+            (msg) => {
           if (String(this.roomId) !== nextRoomId) return;
 
-          const mine = msg.sender?.mine ?? msg.mine ?? false;
           const messageId = msg.messageId ?? Date.now();
+          if (this.messages.some(m => String(m.id) === String(messageId))) {
+            return;
+          }
+          const mine = msg.sender?.mine ?? msg.mine ?? false;
 
           this.messages.push({
             id: messageId,
+            type: msg.messageType ?? 'TEXT',
             name: msg.sender?.senderNickname ?? '',
             text: msg.content ?? msg.text ?? '',
             at: msg.createdAt ?? new Date().toISOString(),
             mine,
             unreadCount: msg.unreadCount ?? 0,
-            senderUserUuid: msg.sender?.senderUserId ?? msg.sender?.userId ?? null,
+            senderUuid: msg.sender?.senderUuid,
             profileImageUrl: msg.sender?.profileImageUrl ?? this.defaultImage,
           });
 
@@ -262,12 +291,16 @@ export default {
           }
 
           this.sendReadDebounced(nextRoomId, messageId);
-        });
+        },
+        { key: 'chat-room-message', replace: true }
+        );
 
-        this.readUnsub = subscribe(`/user/api/sub/chat/rooms/${nextRoomId}/read`, (event) => {
+        this.readUnsub = await subscribe(`/user/api/sub/chat/rooms/${nextRoomId}/read`, (event) => {
           if (String(this.roomId) !== nextRoomId) return;
           this.applyReadUpdated(event);
-        });
+        },
+            { key: 'chat-room-read', replace: true }
+        );
 
       } catch (e) {
         console.error('채팅방 로드 실패', e);
@@ -275,19 +308,45 @@ export default {
         this.loading = false;
       }
     },
+    toggleEmojiPicker() {
+      this.showEmojiPicker = !this.showEmojiPicker;
+    },
 
+    pickEmoji(emoji) {
+      if (!emoji) return;
+
+      this.draft += emoji;
+      this.showEmojiPicker = false;
+
+      this.$nextTick(() => {
+        const input = this.$el.querySelector('.input');
+        input?.focus();
+      });
+    },
     send() {
       const text = this.draft.trim();
       if (!text || !this.roomId) return;
-
+      const messageType = this.isEmojiOnlyMessage(text) ? 'EMOJI' : 'TEXT'
       sendMessage('/api/pub/chat/message', {
         roomId: Number(this.roomId),
-        messageType: 'TEXT',
+        messageType,
         messageContent: text,
       });
 
       this.draft = '';
+      this.showEmojiPicker = false;
       this.$nextTick(() => this.scrollToBottom());
+    },
+
+    isEmojiOnlyMessage(text) {
+      const normalized = text.trim();
+      if(!normalized) return false;
+
+      const noSpaces = normalized.replace(/\s/g, '');
+      const regex = emojiRegex();
+
+      const matches = noSpaces.match(regex);
+      return !!matches && matches.join('') === noSpaces;
     },
 
     sendReadDebounced(roomId, messageId) {
@@ -302,7 +361,6 @@ export default {
       }
 
       this.pendingReadMessageId = messageId;
-      console.log('pending read message id:', this.pendingReadMessageId);
 
       if (this.readTimer) {
         clearTimeout(this.readTimer);
@@ -327,7 +385,7 @@ export default {
 
         sendMessage('/api/pub/chat/read', {
           roomId: Number(roomId),
-          messageId: this.pendingReadMessageId,
+          messageId: targetMessageId,
         });
 
         this.lastSentReadMessageId = targetMessageId;
@@ -335,9 +393,6 @@ export default {
       }, 200);
     },
     applyReadUpdated(event) {
-      console.log("apply read updated start");
-      console.log("event: ", event);
-
       const updatedMap = new Map(
           (event.updatedMessages ?? []).map((m) => [
             String(m.messageId),   // 🔥 문자열로 통일
@@ -347,7 +402,6 @@ export default {
 
       this.messages = this.messages.map((m) => {
         const unreadCount = updatedMap.get(String(m.id));
-        // console.log("unread count :", unreadCount)
         if (unreadCount == null) {
           return m;
         }
@@ -642,5 +696,48 @@ export default {
   100% {
     transform: scale(1);
   }
+}
+
+.composer-wrap {
+  flex-shrink: 0;
+  border-top: 1px solid #e9ecef;
+  background: #fff;
+}
+
+.emoji-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 8px 10px;
+  border-bottom: 1px solid #f1f3f5;
+  background: #fff;
+}
+
+.emoji-btn {
+  border: none;
+  background: transparent;
+  font-size: 24px;
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: 8px;
+}
+
+.emoji-btn:hover {
+  background: #f1f3f5;
+}
+
+.emoji-toggle {
+  border: none;
+  border-radius: 8px;
+  padding: 0 10px;
+  background: #f1f3f5;
+  cursor: pointer;
+  font-size: 18px;
+}
+
+.emoji-text {
+  font-size: 32px;
+  line-height: 1.2;
+  white-space: pre-wrap;
 }
 </style>

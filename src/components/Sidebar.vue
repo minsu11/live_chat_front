@@ -34,6 +34,20 @@
       </v-btn>
     </div>
 
+    <div class="notification-box">
+      <button
+          class="notification-btn"
+          :disabled="isNotificationButtonDisabled"
+          @click="$emit('enable-browser-notification')"
+      >
+        {{ notificationButtonText }}
+      </button>
+      <p class="notification-status">{{ notificationStatusText }}</p>
+      <p v-if="notificationPermission === 'denied'" class="notification-guide">
+        주소창 왼쪽 사이트 권한에서 알림을 허용해 주세요.
+      </p>
+    </div>
+
     <!-- 친구 검색 -->
     <div v-if="currentView === 'friends'" class="search-box">
       <v-text-field
@@ -79,6 +93,7 @@
           @open-chat="$emit('open-chat', $event)"
       />
     </div>
+
 
     <!-- 그룹 채팅 생성 모달 -->
     <GroupChatCreateModal
@@ -131,6 +146,10 @@ export default {
     me: {
       type: Object,
       default: () => ({})
+    },
+    notificationPermission:{
+      type: String,
+      default: 'unsupported'
     }
   },
   data() {
@@ -167,7 +186,34 @@ export default {
     },
     hasKw() {
       return this.kw.length > 0;
-    }
+    },
+    notificationStatusText() {
+      switch (this.notificationPermission) {
+        case 'granted':
+          return '브라우저 알림이 켜져 있어요';
+        case 'denied':
+          return '브라우저 알림이 차단되어 있어요';
+        case 'default':
+          return '브라우저 알림이 꺼져 있어요';
+        default:
+          return '이 브라우저는 알림을 지원하지 않아요';
+      }
+    },
+    notificationButtonText() {
+      switch (this.notificationPermission) {
+        case 'granted':
+          return '알림 켜짐';
+        case 'denied':
+          return '권한 차단됨';
+        case 'default':
+          return '브라우저 알림 켜기';
+        default:
+          return '지원 안 됨';
+      }
+    },
+    isNotificationButtonDisabled() {
+      return this.notificationPermission === 'granted' || this.notificationPermission === 'unsupported';
+    },
   },
   methods: {
     async loadFriends() {
@@ -424,5 +470,41 @@ export default {
 .list-container {
   flex: 1;
   overflow-y: auto;
+}
+
+.notification-box {
+  margin: 12px 0 8px;
+  padding: 10px 12px;
+  background: #f8f9fa;
+  border-radius: 10px;
+}
+
+.notification-btn {
+  width: 100%;
+  border: 0;
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: #4dabf7;
+  color: white;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.notification-btn:disabled {
+  background: #ced4da;
+  cursor: default;
+}
+
+.notification-status {
+  margin-top: 8px;
+  font-size: 12px;
+  color: #495057;
+}
+
+.notification-guide {
+  margin-top: 6px;
+  font-size: 11px;
+  color: #868e96;
+  line-height: 1.4;
 }
 </style>
