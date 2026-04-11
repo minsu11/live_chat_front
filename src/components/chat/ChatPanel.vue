@@ -44,18 +44,37 @@
             <div
                 class="bubble"
                 :class="{
-            mine: m.mine,
-            groupedTop: m.groupedTop,
-            groupedBottom: m.groupedBottom
-          }"
+                mine: m.mine,
+                groupedTop: m.groupedTop,
+                groupedBottom: m.groupedBottom
+              }"
             >
               <div v-if="m.type === 'EMOJI'" class="emoji-text">{{ m.text }}</div>
+
               <img
-                v-else-if="m.type === 'IMAGE'"
-                :src="m.text"
-                alt="chat-image"
-                class="chat-image"
+                  v-else-if="m.type === 'IMAGE'"
+                  :src="m.text"
+                  alt="chat-image"
+                  class="chat-image"
               />
+
+              <div v-else-if="m.type === 'FILE'" class="file-message">
+                <a
+                    :href="getFileDisplay(m.text).url"
+                    :download="getFileDisplay(m.text).fileName"
+                    class="file-link"
+                >
+                  📎 {{ getFileDisplay(m.text).fileName }}
+                </a>
+
+                <div
+                    v-if="getFileDisplay(m.text).fileSize != null"
+                    class="file-size"
+                >
+                  {{ formatFileSize(getFileDisplay(m.text).fileSize) }}
+                </div>
+              </div>
+
               <div v-else class="text">{{ m.text }}</div>
             </div>
 
@@ -90,10 +109,17 @@
         </button>
       </div>
 
-
       <div class="composer">
         <button type="button" class="emoji-toggle" @click="toggleEmojiPicker">😊</button>
         <button type="button" class="image-toggle" @click="openImagePicker">🖼️</button>
+        <button type="button" class="file-toggle" @click="openFilePicker">📎</button>
+
+        <input
+            ref="fileInput"
+            type="file"
+            style="display: none"
+            @change="handleFileSelected"
+        />
 
         <input
             v-model="draft"
@@ -113,15 +139,61 @@
         <button class="send" :disabled="!draft.trim()" @click="send">전송</button>
       </div>
     </footer>
+
+    <!-- 파일 전송 확인 모달 -->
+    <div
+        v-if="pendingFile"
+        class="file-confirm-overlay"
+        @click.self="cancelPendingFile"
+    >
+      <div class="file-confirm-modal">
+        <div class="file-confirm-title">파일을 보내시겠습니까?</div>
+
+        <div class="file-confirm-card">
+          <div class="file-confirm-icon">📎</div>
+
+          <div class="file-confirm-info">
+            <div class="file-confirm-name">{{ pendingFile.name }}</div>
+            <div class="file-confirm-size">
+              {{ formatFileSize(pendingFile.size) }}
+            </div>
+          </div>
+        </div>
+
+        <div v-if="fileError" class="file-confirm-error">
+          {{ fileError }}
+        </div>
+
+        <div class="file-confirm-actions">
+          <button
+              type="button"
+              class="file-confirm-cancel"
+              @click="cancelPendingFile"
+              :disabled="uploadingFile"
+          >
+            취소
+          </button>
+
+          <button
+              type="button"
+              class="file-confirm-submit"
+              @click="confirmSendFile"
+              :disabled="uploadingFile"
+          >
+            {{ uploadingFile ? '전송 중...' : '확인' }}
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script>
 import Api from '@/plugins/axios.js';
 import { subscribe, sendMessage } from '@/services/ws-client.js';
-import emojiRegex  from "emoji-regex";
+import emojiRegex from 'emoji-regex';
 import DefaultImage from '@/assets/default_image.png';
-import {uploadChatImage} from "@/assets/js/chat-file.js";
+import { uploadChatImage, uploadChatFile } from '@/assets/js/chat-file.js';
 
 export default {
   name: 'ChatPanel',
@@ -143,9 +215,11 @@ export default {
       defaultImage: DefaultImage,
       showEmojiPicker: false,
       emojiList: ['😀', '😂', '👍', '❤️', '😭', '🎉', '🔥', '🥹'],
+      pendingFile: null,
+      uploadingFile: false,
+      fileError: '',
     };
   },
-
 
   async mounted() {
     await this.loadMe();
@@ -226,9 +300,54 @@ export default {
       return this.isSameMinute(a.at, b.at);
     },
 
+    parseFileContent(content) {
+      try {
+        return JSON.parse(content);
+      } catch (e) {
+        return null;
+      }
+    },
+
+    extractFileName(url) {
+      if (!url) return '';
+
+      try {
+        const clean = String(url).split('?')[0];
+        const decoded = decodeURIComponent(clean);
+        const name = decoded.substring(decoded.lastIndexOf('/') + 1);
+        return name || '';
+      } catch (e) {
+        return '';
+      }
+    },
+
+    getFileDisplay(content) {
+      const parsed = this.parseFileContent(content);
+
+      if (parsed) {
+        const url = parsed.url ?? parsed.fileUrl ?? '';
+
+        return {
+          url,
+          fileName:
+              parsed.fileName ??
+              parsed.originalFileName ??
+              parsed.name ??
+              this.extractFileName(url) ??
+              '파일',
+          fileSize: parsed.fileSize ?? null,
+        };
+      }
+
+      return {
+        url: content,
+        fileName: this.extractFileName(content) || '파일 다운로드',
+        fileSize: null,
+      };
+    },
+
     isSameVisualGroup(a, b) {
       if (!this.isSameGroup(a, b)) return false;
-
       return Number(a.unreadCount ?? 0) === Number(b.unreadCount ?? 0);
     },
 
@@ -277,54 +396,59 @@ export default {
         await this.$nextTick();
         this.scrollToBottom();
 
-        this.unsub = await subscribe(`/user/api/sub/chat/rooms/${nextRoomId}`,
+        this.unsub = await subscribe(
+            `/user/api/sub/chat/rooms/${nextRoomId}`,
             (msg) => {
-          if (String(this.roomId) !== nextRoomId) return;
+              if (String(this.roomId) !== nextRoomId) return;
 
-          const messageId = msg.messageId ?? Date.now();
-          if (this.messages.some(m => String(m.id) === String(messageId))) {
-            return;
-          }
-          const mine = msg.sender?.mine ?? msg.mine ?? false;
+              const messageId = msg.messageId ?? Date.now();
+              if (this.messages.some(m => String(m.id) === String(messageId))) {
+                return;
+              }
 
-          this.messages.push({
-            id: messageId,
-            type: msg.messageType ?? 'TEXT',
-            name: msg.sender?.senderNickname ?? '',
-            text: msg.content ?? msg.text ?? '',
-            at: msg.createdAt ?? new Date().toISOString(),
-            mine,
-            unreadCount: msg.unreadCount ?? 0,
-            senderUuid: msg.sender?.senderUuid,
-            profileImageUrl: msg.sender?.profileImageUrl ?? this.defaultImage,
-          });
+              const mine = msg.sender?.mine ?? msg.mine ?? false;
 
-          this.$nextTick(() => this.scrollToBottom());
+              this.messages.push({
+                id: messageId,
+                type: msg.messageType ?? 'TEXT',
+                name: msg.sender?.senderNickname ?? '',
+                text: msg.content ?? msg.text ?? '',
+                at: msg.createdAt ?? new Date().toISOString(),
+                mine,
+                unreadCount: msg.unreadCount ?? 0,
+                senderUuid: msg.sender?.senderUuid,
+                profileImageUrl: msg.sender?.profileImageUrl ?? this.defaultImage,
+              });
 
-          if (mine) return;
-          if (document.visibilityState !== 'visible') {
-            this.pendingVisibleReadMessageId = messageId;
-            return;
-          }
+              this.$nextTick(() => this.scrollToBottom());
 
-          this.sendReadDebounced(nextRoomId, messageId);
-        },
-        { key: 'chat-room-message', replace: true }
+              if (mine) return;
+
+              if (document.visibilityState !== 'visible') {
+                this.pendingVisibleReadMessageId = messageId;
+                return;
+              }
+
+              this.sendReadDebounced(nextRoomId, messageId);
+            },
+            { key: 'chat-room-message', replace: true }
         );
 
-        this.readUnsub = await subscribe(`/user/api/sub/chat/rooms/${nextRoomId}/read`, (event) => {
-          if (String(this.roomId) !== nextRoomId) return;
-          this.applyReadUpdated(event);
-        },
+        this.readUnsub = await subscribe(
+            `/user/api/sub/chat/rooms/${nextRoomId}/read`,
+            (event) => {
+              if (String(this.roomId) !== nextRoomId) return;
+              this.applyReadUpdated(event);
+            },
             { key: 'chat-room-read', replace: true }
         );
-
       } catch (e) {
         console.error('채팅방 로드 실패', e);
       } finally {
         this.loading = false;
       }
     },
+
     toggleEmojiPicker() {
       this.showEmojiPicker = !this.showEmojiPicker;
     },
@@ -340,10 +464,13 @@ export default {
         input?.focus();
       });
     },
+
     send() {
       const text = this.draft.trim();
       if (!text || !this.roomId) return;
-      const messageType = this.isEmojiOnlyMessage(text) ? 'EMOJI' : 'TEXT'
+
+      const messageType = this.isEmojiOnlyMessage(text) ? 'EMOJI' : 'TEXT';
+
       sendMessage('/api/pub/chat/message', {
         roomId: Number(this.roomId),
         messageType,
@@ -357,7 +484,7 @@ export default {
 
     isEmojiOnlyMessage(text) {
       const normalized = text.trim();
-      if(!normalized) return false;
+      if (!normalized) return false;
 
       const noSpaces = normalized.replace(/\s/g, '');
       const regex = emojiRegex();
@@ -367,13 +494,12 @@ export default {
     },
 
     sendReadDebounced(roomId, messageId) {
+      if (!messageId) return;
 
-      if(!messageId) return;
-
-      if(
-          this.lastSentReadMessageId !=null &&
+      if (
+          this.lastSentReadMessageId != null &&
           Number(messageId) <= Number(this.lastSentReadMessageId)
-      ){
+      ) {
         return;
       }
 
@@ -386,19 +512,18 @@ export default {
       this.readTimer = setTimeout(() => {
         const targetMessageId = this.pendingReadMessageId;
 
-        if(!targetMessageId){
+        if (!targetMessageId) {
           this.readTimer = null;
           return;
         }
 
-        if(
+        if (
             this.lastSentReadMessageId != null &&
             Number(targetMessageId) <= Number(this.lastSentReadMessageId)
-        ){
+        ) {
           this.readTimer = null;
           return;
         }
-
 
         sendMessage('/api/pub/chat/read', {
           roomId: Number(roomId),
@@ -409,11 +534,12 @@ export default {
         this.readTimer = null;
       }, 200);
     },
+
     applyReadUpdated(event) {
       const updatedMap = new Map(
           (event.updatedMessages ?? []).map((m) => [
-            String(m.messageId),   // 🔥 문자열로 통일
-            m.unreadCount
+            String(m.messageId),
+            m.unreadCount,
           ])
       );
 
@@ -429,6 +555,7 @@ export default {
         };
       });
     },
+
     handleVisibilityChange() {
       if (document.visibilityState !== 'visible') {
         return;
@@ -461,6 +588,7 @@ export default {
         this.readUnsub = null;
       }
     },
+
     openImagePicker() {
       this.$refs.imageInput?.click();
     },
@@ -475,7 +603,7 @@ export default {
         sendMessage('/api/pub/chat/message', {
           roomId: Number(this.roomId),
           messageType: 'IMAGE',
-          messageContent: uploaded.fileUrl,
+          messageContent: uploaded.fileUrl ?? uploaded.url,
         });
       } catch (e) {
         console.error('채팅 이미지 업로드 실패', e);
@@ -485,6 +613,74 @@ export default {
         }
       }
     },
+
+    openFilePicker() {
+      this.$refs.fileInput?.click();
+    },
+
+    handleFileSelected(event) {
+      const file = event.target.files?.[0];
+
+      if (!file || !this.roomId) return;
+
+      this.fileError = '';
+      this.pendingFile = file;
+
+      if (event.target) {
+        event.target.value = '';
+      }
+    },
+
+    async confirmSendFile() {
+      if (!this.pendingFile || !this.roomId || this.uploadingFile) return;
+
+      try {
+        this.uploadingFile = true;
+        this.fileError = '';
+
+        const uploaded = await uploadChatFile(this.pendingFile);
+
+        const filePayload = {
+          url: uploaded.url ?? uploaded.fileUrl,
+          fileName:
+              uploaded.fileName ??
+              uploaded.originalFileName ??
+              uploaded.name ??
+              this.pendingFile.name,
+          contentType: uploaded.contentType ?? this.pendingFile.type,
+          fileSize: uploaded.fileSize ?? this.pendingFile.size,
+        };
+
+        sendMessage('/api/pub/chat/message', {
+          roomId: Number(this.roomId),
+          messageType: 'FILE',
+          messageContent: JSON.stringify(filePayload),
+        });
+
+        this.pendingFile = null;
+      } catch (e) {
+        console.error('파일 전송 실패', e);
+        this.fileError = '파일 전송에 실패했습니다.';
+      } finally {
+        this.uploadingFile = false;
+      }
+    },
+
+    cancelPendingFile() {
+      if (this.uploadingFile) return;
+      this.pendingFile = null;
+      this.fileError = '';
+    },
+
+    formatFileSize(size) {
+      if (size == null || Number.isNaN(Number(size))) return '';
+
+      const bytes = Number(size);
+      if (bytes < 1024) return `${bytes} B`;
+      if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+      return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+    },
+
     scrollToBottom() {
       const el = this.$refs.list;
       if (!el) return;
@@ -500,7 +696,6 @@ export default {
       const d = new Date(iso);
       return Number.isNaN(d.getTime()) ? '' : d.toLocaleString();
     },
-
   },
 
   beforeUnmount() {
@@ -518,6 +713,7 @@ export default {
 
 <style scoped>
 .panel {
+  position: relative;
   height: 100vh;
   max-height: 100vh;
   display: flex;
@@ -669,12 +865,17 @@ export default {
   white-space: nowrap;
 }
 
+.composer-wrap {
+  flex-shrink: 0;
+  border-top: 1px solid #e9ecef;
+  background: #fff;
+}
+
 .composer {
   flex-shrink: 0;
   display: flex;
   gap: 8px;
   padding: 10px;
-  border-top: 1px solid #e9ecef;
   background: #fff;
 }
 
@@ -739,12 +940,6 @@ export default {
   }
 }
 
-.composer-wrap {
-  flex-shrink: 0;
-  border-top: 1px solid #e9ecef;
-  background: #fff;
-}
-
 .emoji-picker {
   display: flex;
   flex-wrap: wrap;
@@ -767,7 +962,9 @@ export default {
   background: #f1f3f5;
 }
 
-.emoji-toggle {
+.emoji-toggle,
+.image-toggle,
+.file-toggle {
   border: none;
   border-radius: 8px;
   padding: 0 10px;
@@ -791,12 +988,124 @@ export default {
   cursor: pointer;
 }
 
-.image-toggle {
+.file-message {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.file-link {
+  color: inherit;
+  text-decoration: none;
+  font-weight: 600;
+  word-break: break-all;
+}
+
+.file-size {
+  font-size: 12px;
+  opacity: 0.7;
+}
+
+.file-confirm-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.28);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 30;
+}
+
+.file-confirm-modal {
+  width: 320px;
+  max-width: calc(100% - 32px);
+  background: #fff;
+  border-radius: 16px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.18);
+  padding: 18px 16px 14px;
+}
+
+.file-confirm-title {
+  font-size: 16px;
+  font-weight: 700;
+  margin-bottom: 14px;
+  color: #212529;
+}
+
+.file-confirm-card {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 12px;
+  border-radius: 12px;
+  background: #f8f9fa;
+  margin-bottom: 14px;
+}
+
+.file-confirm-icon {
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  background: #e7f5ff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  flex-shrink: 0;
+}
+
+.file-confirm-info {
+  min-width: 0;
+  flex: 1;
+}
+
+.file-confirm-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: #212529;
+  word-break: break-all;
+}
+
+.file-confirm-size {
+  margin-top: 4px;
+  font-size: 12px;
+  color: #868e96;
+}
+
+.file-confirm-error {
+  font-size: 13px;
+  color: #e03131;
+  margin-bottom: 12px;
+}
+
+.file-confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.file-confirm-cancel,
+.file-confirm-submit {
   border: none;
-  border-radius: 8px;
-  padding: 0 10px;
-  background: #f1f3f5;
+  border-radius: 10px;
+  padding: 10px 14px;
   cursor: pointer;
-  font-size: 18px;
+  font-weight: 600;
+}
+
+.file-confirm-cancel {
+  background: #f1f3f5;
+  color: #495057;
+}
+
+.file-confirm-submit {
+  background: #4dabf7;
+  color: #fff;
+}
+
+.file-confirm-cancel:disabled,
+.file-confirm-submit:disabled {
+  opacity: 0.6;
+  cursor: default;
 }
 </style>
