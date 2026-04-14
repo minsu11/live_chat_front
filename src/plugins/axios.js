@@ -41,6 +41,8 @@ api.interceptors.response.use(
     async (error) => {
         const originalRequest = error.config;
         const status = error.response?.status;
+        console.log('axios error: ',error);
+
 
         if ((status === 401 || status === 403) && !originalRequest._retry) {
             originalRequest._retry = true;

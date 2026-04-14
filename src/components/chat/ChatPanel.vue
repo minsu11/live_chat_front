@@ -60,17 +60,13 @@
 
               <div v-else-if="m.type === 'FILE'" class="file-message">
                 <a
-                    :href="getFileDisplay(m.text).url"
-                    :download="getFileDisplay(m.text).fileName"
+                    :href="getFileDownloadUrl(m.text)"
                     class="file-link"
                 >
                   📎 {{ getFileDisplay(m.text).fileName }}
                 </a>
 
-                <div
-                    v-if="getFileDisplay(m.text).fileSize != null"
-                    class="file-size"
-                >
+                <div v-if="getFileDisplay(m.text).fileSize != null" class="file-size">
                   {{ formatFileSize(getFileDisplay(m.text).fileSize) }}
                 </div>
               </div>
@@ -162,6 +158,10 @@
 
         <div v-if="fileError" class="file-confirm-error">
           {{ fileError }}
+        </div>
+
+        <div class="file-confirm-help">
+          업로드 가능한 파일만 전송할 수 있습니다.
         </div>
 
         <div class="file-confirm-actions">
@@ -325,23 +325,19 @@ export default {
       const parsed = this.parseFileContent(content);
 
       if (parsed) {
-        const url = parsed.url ?? parsed.fileUrl ?? '';
-
         return {
-          url,
+          attachmentId: parsed.attachmentId ?? null,
           fileName:
               parsed.fileName ??
               parsed.originalFileName ??
-              parsed.name ??
-              this.extractFileName(url) ??
               '파일',
           fileSize: parsed.fileSize ?? null,
         };
       }
 
       return {
-        url: content,
-        fileName: this.extractFileName(content) || '파일 다운로드',
+        attachmentId: null,
+        fileName: '파일 다운로드',
         fileSize: null,
       };
     },
@@ -633,23 +629,24 @@ export default {
 
     async confirmSendFile() {
       if (!this.pendingFile || !this.roomId || this.uploadingFile) return;
+      if (!this.validatePendingFile()) {
+        return;
+      }
 
       try {
         this.uploadingFile = true;
         this.fileError = '';
 
-        const uploaded = await uploadChatFile(this.pendingFile);
+        const uploaded = await uploadChatFile(this.pendingFile, Number(this.roomId));
 
         const filePayload = {
-          url: uploaded.url ?? uploaded.fileUrl,
-          fileName:
-              uploaded.fileName ??
-              uploaded.originalFileName ??
-              uploaded.name ??
-              this.pendingFile.name,
+          attachmentId: uploaded.attachmentId,
+          fileName: uploaded.fileName ?? this.pendingFile.name,
           contentType: uploaded.contentType ?? this.pendingFile.type,
           fileSize: uploaded.fileSize ?? this.pendingFile.size,
         };
+
+        console.log("file payload: ", filePayload);
 
         sendMessage('/api/pub/chat/message', {
           roomId: Number(this.roomId),
@@ -658,14 +655,23 @@ export default {
         });
 
         this.pendingFile = null;
+        this.fileError = '';
       } catch (e) {
         console.error('파일 전송 실패', e);
-        this.fileError = '파일 전송에 실패했습니다.';
+        this.fileError = this.resolveFileErrorMessage(e);
       } finally {
         this.uploadingFile = false;
       }
     },
+    getFileDownloadUrl(content) {
+    const parsed = this.parseFileContent(content);
 
+    if (!parsed?.attachmentId) {
+      return '#';
+    }
+
+    return `/api/v1/chat-attachments/${parsed.attachmentId}/download`;
+    },
     cancelPendingFile() {
       if (this.uploadingFile) return;
       this.pendingFile = null;
@@ -695,6 +701,33 @@ export default {
     format(iso) {
       const d = new Date(iso);
       return Number.isNaN(d.getTime()) ? '' : d.toLocaleString();
+    },
+    resolveFileErrorMessage(error) {
+      console.log('error: ', error);
+      const code = error?.code;
+      const status = error?.status;
+
+      if (code === 'FILE_SIZE_EXCEEDED' || status === 413) {
+        return '파일 크기가 제한을 초과했습니다.';
+      }
+
+      if (code === 'INVALID_FILE_UPLOAD') {
+        return '파일 업로드 요청이 올바르지 않습니다.';
+      }
+
+
+      return error?.message || '파일 전송에 실패했습니다.';
+    },
+    validatePendingFile() {
+      if (!this.pendingFile) return false;
+
+      const MAX_FILE_SIZE = 1 * 1024 * 1024; // 1MB
+      if (this.pendingFile.size > MAX_FILE_SIZE) {
+        this.fileError = '파일 크기가 제한을 초과했습니다.';
+        return false;
+      }
+
+      return true;
     },
   },
 
@@ -1075,6 +1108,12 @@ export default {
 .file-confirm-error {
   font-size: 13px;
   color: #e03131;
+  margin-bottom: 10px;
+}
+
+.file-confirm-help {
+  font-size: 12px;
+  color: #868e96;
   margin-bottom: 12px;
 }
 
@@ -1107,5 +1146,11 @@ export default {
 .file-confirm-submit:disabled {
   opacity: 0.6;
   cursor: default;
+}
+
+.error-text {
+  color: #e03131;
+  font-size: 13px;
+  padding: 8px 12px;
 }
 </style>
