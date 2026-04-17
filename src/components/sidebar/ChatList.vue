@@ -28,7 +28,7 @@
 import RoomCard from '@/components/sidebar/RoomCard.vue';
 import defaultProfile from '@/assets/default_image.png';
 import { fetchChats } from '@/assets/js/chats.js';
-import { connectWebSocket, subscribe } from '@/services/ws-client.js';
+import { connectWebSocket, registerSubscription } from '@/services/ws-client.js';
 
 function formatTime(isoOrLocalDateTime) {
   try {
@@ -260,7 +260,7 @@ export default {
 
         if (!this.chatListUpsertSubscription) {
           const chatListDestination = `/user/api/sub/chat-list`;
-          this.chatListUpsertSubscription = await subscribe(
+          this.chatListUpsertSubscription = await registerSubscription(
               chatListDestination,
               (event) => {
             this.applyChatListUpsertEvent(event);

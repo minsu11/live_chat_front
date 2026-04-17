@@ -156,8 +156,8 @@
           </div>
         </div>
 
-        <div v-if="fileError" class="file-confirm-error">
-          {{ fileError }}
+        <div v-if="fileValidationError || fileError" class="file-confirm-error">
+          {{ fileValidationError || fileError }}
         </div>
 
         <div class="file-confirm-help">
@@ -178,7 +178,7 @@
               type="button"
               class="file-confirm-submit"
               @click="confirmSendFile"
-              :disabled="uploadingFile"
+              :disabled="uploadingFile || !!fileValidationError"
           >
             {{ uploadingFile ? '전송 중...' : '확인' }}
           </button>
@@ -190,7 +190,7 @@
 
 <script>
 import Api from '@/plugins/axios.js';
-import { subscribe, sendMessage } from '@/services/ws-client.js';
+import {addReconnectListener, sendMessage, registerSubscription} from '@/services/ws-client.js';
 import emojiRegex from 'emoji-regex';
 import DefaultImage from '@/assets/default_image.png';
 import { uploadChatImage, uploadChatFile } from '@/assets/js/chat-file.js';
@@ -212,19 +212,41 @@ export default {
       pendingReadMessageId: null,
       pendingVisibleReadMessageId: null,
       lastSentReadMessageId: null,
+      lastReceivedMessageId: null,
+      removeReconnectListener: null,
       defaultImage: DefaultImage,
       showEmojiPicker: false,
       emojiList: ['😀', '😂', '👍', '❤️', '😭', '🎉', '🔥', '🥹'],
       pendingFile: null,
       uploadingFile: false,
       fileError: '',
+      fileValidationError: '',
     };
   },
 
   async mounted() {
     await this.loadMe();
     document.addEventListener('visibilitychange', this.handleVisibilityChange);
+    this.removeReconnectListener = addReconnectListener(async ()=>{
+      console.log('[RECONNECT] listener fired');
+      if(!this.roomId) return;
+
+      console.log('🔁 reconnect 후 catch-up 시작. roomId=', this.roomId);
+      await this.catchUpMessages();
+    })
+
     await this.loadRoom(this.$route.params.roomId);
+  },
+
+  beforeUnmount() {
+    document.removeEventListener('visibilitychange', this.handleVisibilityChange);
+
+    if (this.readTimer) {
+      clearTimeout(this.readTimer);
+      this.readTimer = null;
+    }
+    this.removeReconnectListener?.();
+    this.cleanupSubscription();
   },
 
   computed: {
@@ -364,6 +386,7 @@ export default {
         this.messages = [];
         this.roomId = '';
         this.lastSentReadMessageId = null;
+        this.lastReceivedMessageId = null;
         this.cleanupSubscription();
         return;
       }
@@ -389,15 +412,18 @@ export default {
         this.roomTitle = data?.title ?? '채팅방';
         this.messages = (data?.messages ?? []).map(this.mapMessage);
 
+        this.refreshLastReceivedMessageId();
+
         await this.$nextTick();
         this.scrollToBottom();
 
-        this.unsub = await subscribe(
+        this.unsub = await registerSubscription(
             `/user/api/sub/chat/rooms/${nextRoomId}`,
             (msg) => {
               if (String(this.roomId) !== nextRoomId) return;
 
               const messageId = msg.messageId ?? Date.now();
+
               if (this.messages.some(m => String(m.id) === String(messageId))) {
                 return;
               }
@@ -415,6 +441,7 @@ export default {
                 senderUuid: msg.sender?.senderUuid,
                 profileImageUrl: msg.sender?.profileImageUrl ?? this.defaultImage,
               });
+              this.updateLastReceivedMessageId(messageId);
 
               this.$nextTick(() => this.scrollToBottom());
 
@@ -427,16 +454,16 @@ export default {
 
               this.sendReadDebounced(nextRoomId, messageId);
             },
-            { key: 'chat-room-message', replace: true }
+            {key: 'chat-room-message', replace: true}
         );
 
-        this.readUnsub = await subscribe(
+        this.readUnsub = await registerSubscription(
             `/user/api/sub/chat/rooms/${nextRoomId}/read`,
             (event) => {
               if (String(this.roomId) !== nextRoomId) return;
               this.applyReadUpdated(event);
             },
-            { key: 'chat-room-read', replace: true }
+            {key: 'chat-room-read', replace: true}
         );
       } catch (e) {
         console.error('채팅방 로드 실패', e);
@@ -476,6 +503,58 @@ export default {
       this.draft = '';
       this.showEmojiPicker = false;
       this.$nextTick(() => this.scrollToBottom());
+    },
+
+    async catchUpMessages() {
+      console.log("catch up message");
+      if (!this.roomId || !this.lastReceivedMessageId) {
+        console.log('[CATCH_UP] skip', {
+          roomId: this.roomId,
+          lastReceivedMessageId: this.lastReceivedMessageId,
+        });
+        return;
+      }
+
+      console.log('[CATCH_UP] start', {
+        roomId: this.roomId,
+        afterMessageId: this.lastReceivedMessageId,
+      });
+
+      try {
+        const res = await Api.get(`/v1/chat-room/${this.roomId}/messages/after`, {
+          params: {
+            afterMessageId: this.lastReceivedMessageId,
+            limit: 100,
+          },
+        });
+
+        const data = res;
+        console.log('[CATCH_UP response', data);
+        const incomingMessages = (data?.messages ?? []).map(this.mapMessage);
+
+        this.mergeMessages(incomingMessages);
+
+        if (data?.lastMessageId) {
+          this.lastReceivedMessageId = data.lastMessageId;
+        }
+
+        if (
+            incomingMessages.length > 0 &&
+            String(this.roomId) === String(this.currentRoomId) &&
+            document.visibilityState === 'visible'
+        ) {
+          const latestRecoveredMessageId =
+              data?.lastMessageId ?? incomingMessages[incomingMessages.length - 1]?.id;
+
+          if (latestRecoveredMessageId) {
+            console.log('[CATCH_UP] recovered messages exist, send read', latestRecoveredMessageId);
+            this.sendReadDebounced(this.roomId, latestRecoveredMessageId);
+          }
+        }
+
+      } catch (e) {
+        console.error('누락 메시지 복구 실패', e);
+      }
     },
 
     isEmojiOnlyMessage(text) {
@@ -565,6 +644,54 @@ export default {
       this.pendingVisibleReadMessageId = null;
     },
 
+    refreshLastReceivedMessageId() {
+      if (!this.messages.length) {
+        this.lastReceivedMessageId = null;
+        return;
+      }
+
+      const maxId = this.messages.reduce((max, message) => {
+        const currentId = Number(message.id);
+        return Number.isNaN(currentId) ? max : Math.max(max, currentId);
+      }, 0);
+
+      this.lastReceivedMessageId = maxId || null;
+    },
+
+    updateLastReceivedMessageId(messageId) {
+      const numericId = Number(messageId);
+      if (Number.isNaN(numericId)) return;
+
+      if (this.lastReceivedMessageId == null || numericId > this.lastReceivedMessageId) {
+        this.lastReceivedMessageId = numericId;
+      }
+    },
+
+    mergeMessages(incomingMessages) {
+      const existingIds = new Set(this.messages.map(message => String(message.id)));
+
+      const newMessages = incomingMessages.filter(
+          message => !existingIds.has(String(message.id))
+      );
+
+      if (!newMessages.length) {
+        return;
+      }
+
+      this.messages = [...this.messages, ...newMessages].sort((a, b) => {
+        const timeA = new Date(a.at).getTime();
+        const timeB = new Date(b.at).getTime();
+
+        if (timeA === timeB) {
+          return Number(a.id) - Number(b.id);
+        }
+
+        return timeA - timeB;
+      });
+
+      this.refreshLastReceivedMessageId();
+    },
+
     cleanupSubscription() {
       if (this.unsub) {
         if (typeof this.unsub === 'function') {
@@ -620,7 +747,10 @@ export default {
       if (!file || !this.roomId) return;
 
       this.fileError = '';
+      this.fileValidationError = '';
       this.pendingFile = file;
+
+      this.fileValidationError = this.validatePendingFile(file);
 
       if (event.target) {
         event.target.value = '';
@@ -629,7 +759,8 @@ export default {
 
     async confirmSendFile() {
       if (!this.pendingFile || !this.roomId || this.uploadingFile) return;
-      if (!this.validatePendingFile()) {
+      this.fileValidationError = this.validatePendingFile();
+      if (this.fileValidationError) {
         return;
       }
 
@@ -656,6 +787,7 @@ export default {
 
         this.pendingFile = null;
         this.fileError = '';
+        this.fileValidationError = '';
       } catch (e) {
         console.error('파일 전송 실패', e);
         this.fileError = this.resolveFileErrorMessage(e);
@@ -664,18 +796,20 @@ export default {
       }
     },
     getFileDownloadUrl(content) {
-    const parsed = this.parseFileContent(content);
+      const parsed = this.parseFileContent(content);
 
-    if (!parsed?.attachmentId) {
-      return '#';
-    }
+      if (!parsed?.attachmentId) {
+        return '#';
+      }
 
-    return `/api/v1/chat-attachments/${parsed.attachmentId}/download`;
+      return `/api/v1/chat-attachments/${parsed.attachmentId}/download`;
     },
     cancelPendingFile() {
       if (this.uploadingFile) return;
       this.pendingFile = null;
       this.fileError = '';
+      this.fileValidationError = '';
+
     },
 
     formatFileSize(size) {
@@ -702,45 +836,74 @@ export default {
       const d = new Date(iso);
       return Number.isNaN(d.getTime()) ? '' : d.toLocaleString();
     },
+
     resolveFileErrorMessage(error) {
-      console.log('error: ', error);
       const code = error?.code;
       const status = error?.status;
+      const message = error?.message || '';
 
       if (code === 'FILE_SIZE_EXCEEDED' || status === 413) {
         return '파일 크기가 제한을 초과했습니다.';
       }
 
-      if (code === 'INVALID_FILE_UPLOAD') {
+      if (code === 'INVALID_INPUT') {
+        if (message.includes('허용되지 않는 파일 형식')) {
+          return '허용되지 않는 파일 형식입니다.';
+        }
         return '파일 업로드 요청이 올바르지 않습니다.';
       }
 
-
-      return error?.message || '파일 전송에 실패했습니다.';
-    },
-    validatePendingFile() {
-      if (!this.pendingFile) return false;
-
-      const MAX_FILE_SIZE = 1 * 1024 * 1024; // 1MB
-      if (this.pendingFile.size > MAX_FILE_SIZE) {
-        this.fileError = '파일 크기가 제한을 초과했습니다.';
-        return false;
+      if (code === 'NO_PERMISSION' || status === 403) {
+        return '이 채팅방에서는 파일을 업로드할 수 없습니다.';
       }
 
-      return true;
+      if (status === 500) {
+        return '파일 저장에 실패했습니다. 다시 시도해 주세요.';
+      }
+
+      if (!status && message === 'Network Error') {
+        return '업로드 중 연결이 끊어졌습니다. 다시 시도해 주세요.';
+      }
+
+      return message || '파일 업로드에 실패했습니다. 다시 시도해 주세요.';
     },
+
+    validatePendingFile(file = this.pendingFile) {
+      if (!file) {
+        return '파일을 선택해 주세요';
+      }
+
+      const MAX_FILE_SIZE = 1 * 1024 * 1024; // 1MB
+      const allowedExtensions = new Set([
+        'pdf', 'txt', 'doc', 'docx',
+        'xls', 'xlsx', 'ppt', 'pptx',
+        'zip', 'hwp', 'hwpx',
+        'jpg', 'jpeg', 'png'
+      ])
+
+      if (file.size === 0) {
+        return '빈 파일은 전송할 수 없습니다.';
+      }
+
+      if (file.size > MAX_FILE_SIZE) {
+        return '파일 크기가 제한을 초과했습니다.';
+      }
+
+      const fileName = file.name || '';
+      const extension = fileName.includes('.')
+          ? fileName.split('.').pop().toLowerCase()
+          : '';
+
+      if (!allowedExtensions.has(extension)) {
+        return '허용되지 않는 파일 형식입니다.';
+      }
+
+      return '';
+    },
+
+
   },
 
-  beforeUnmount() {
-    this.cleanupSubscription();
-
-    if (this.readTimer) {
-      clearTimeout(this.readTimer);
-      this.readTimer = null;
-    }
-
-    document.removeEventListener('visibilitychange', this.handleVisibilityChange);
-  },
 };
 </script>
 

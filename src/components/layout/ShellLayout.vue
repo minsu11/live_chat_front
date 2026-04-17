@@ -34,7 +34,7 @@ import MenuDropdown from "@/components/MenuDropdown.vue";
 import api from "@/plugins/axios.js";
 import { fetchChats } from '@/assets/js/chats.js';
 import { openExistingChat } from '@/assets/js/chat-navigation.js';
-import { connectWebSocket, subscribe, disconnectWebSocket } from '@/services/ws-client.js';
+import { connectWebSocket, registerSubscription, disconnectWebSocket } from '@/services/ws-client.js';
 
 export default {
   name: 'HomePage',
@@ -195,7 +195,7 @@ export default {
 
         const destination = '/user/api/sub/chat/notification';
 
-        this.globalSummarySubscription = await subscribe(
+        this.globalSummarySubscription = await registerSubscription(
             destination,
             (event) => {
           this.handleGlobalSummaryEvent(event);
