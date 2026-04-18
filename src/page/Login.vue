@@ -59,7 +59,6 @@
 import api from '@/plugins/axios.js'
 import { connectWebSocket } from '@/services/ws-client.js'
 import AuthLayout from '@/components/layout/AuthLayout.vue'
-import '@/assets/css/auth-login.css'
 
 export default {
   name: 'ChatLogin',
@@ -99,5 +98,5 @@ export default {
 }
 </script>
 
-<style scoped>
+<style scoped src="@/assets/css/auth-login.css">
 </style>

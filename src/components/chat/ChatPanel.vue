@@ -506,50 +506,69 @@ export default {
     },
 
     async catchUpMessages() {
-      console.log("catch up message");
-      if (!this.roomId || !this.lastReceivedMessageId) {
+      if (!this.roomId ) {
         console.log('[CATCH_UP] skip', {
           roomId: this.roomId,
           lastReceivedMessageId: this.lastReceivedMessageId,
         });
+
         return;
       }
 
-      console.log('[CATCH_UP] start', {
-        roomId: this.roomId,
-        afterMessageId: this.lastReceivedMessageId,
-      });
 
       try {
-        const res = await Api.get(`/v1/chat-room/${this.roomId}/messages/after`, {
-          params: {
-            afterMessageId: this.lastReceivedMessageId,
-            limit: 100,
-          },
+        console.log('[CATCH_UP] start', {
+          roomId: this.roomId,
+          afterMessageId: this.lastReceivedMessageId,
         });
 
-        const data = res;
-        console.log('[CATCH_UP response', data);
-        const incomingMessages = (data?.messages ?? []).map(this.mapMessage);
+        let nextAfterMessageId = this.lastReceivedMessageId ?? 0;
+        let finalLastMessageId = this.lastReceivedMessageId ?? 0;
+        let totalRecoveredCount = 0;
+        let hasMore = true;
 
-        this.mergeMessages(incomingMessages);
+        while (hasMore) {
+          const res = await Api.get(`/v1/chat-room/${this.roomId}/messages/after`, {
+            params: {
+              afterMessageId: nextAfterMessageId,
+              limit: 100,
+            },
+          });
 
-        if (data?.lastMessageId) {
-          this.lastReceivedMessageId = data.lastMessageId;
+          const data = res;
+          console.log('[CATCH_UP] response', data);
+
+          const incomingMessages = (data?.messages ?? []).map(this.mapMessage);
+          this.mergeMessages(incomingMessages);
+
+          totalRecoveredCount += incomingMessages.length;
+
+          if (data?.lastMessageId != null) {
+            finalLastMessageId = data.lastMessageId;
+            nextAfterMessageId = data.lastMessageId;
+            this.lastReceivedMessageId = data.lastMessageId;
+          }
+
+          hasMore = !!data?.hasMore;
+
+          // 안전장치: 메시지가 없는데 hasMore=true면 무한루프 방지
+          if (incomingMessages.length === 0) {
+            break;
+          }
         }
 
+        // 복구된 메시지가 있고, 현재 방을 보고 있고, 탭이 visible이면 read 전송
         if (
-            incomingMessages.length > 0 &&
-            String(this.roomId) === String(this.currentRoomId) &&
-            document.visibilityState === 'visible'
-        ) {
-          const latestRecoveredMessageId =
-              data?.lastMessageId ?? incomingMessages[incomingMessages.length - 1]?.id;
-
-          if (latestRecoveredMessageId) {
-            console.log('[CATCH_UP] recovered messages exist, send read', latestRecoveredMessageId);
-            this.sendReadDebounced(this.roomId, latestRecoveredMessageId);
+            totalRecoveredCount > 0 &&
+            String(this.roomId) === String(this.currentRoomId)) {
+          if(document.visibilityState === 'visible'){
+            console.log('[CATCH_UP] recovered messages exist, send read', finalLastMessageId);
+            this.sendReadDebounced(this.roomId, finalLastMessageId);
+          }else{
+            console.log('[CATCH_UP] hidden tab, defer read', finalLastMessageId);
+            this.pendingVisibleReadMessageId = finalLastMessageId;
           }
+
         }
 
       } catch (e) {

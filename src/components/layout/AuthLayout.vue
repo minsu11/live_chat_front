@@ -23,7 +23,6 @@
 </template>
 
 <script>
-import '@/assets/css/auth-common.css'
 
 export default {
   name: 'AuthLayout',
@@ -40,5 +39,5 @@ export default {
 }
 </script>
 
-<style scoped>
+<style scoped src="@/assets/css/auth-common.css">
 </style>

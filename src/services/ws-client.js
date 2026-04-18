@@ -297,7 +297,7 @@ export function disconnectWebSocket() {
  * 주의:
  * - stompjs 내부 private 필드를 사용하므로 dev/test 용으로만 써야 함
  */
-export function simulateSocketDropForTest() {
+function simulateSocketDropForTest() {
     if (!stompClient) {
         console.warn('🧪 simulateSocketDropForTest: stompClient 없음');
         return false;

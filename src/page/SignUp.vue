@@ -126,7 +126,6 @@
 import moment from 'moment'
 import api from '@/plugins/axios.js'
 import AuthLayout from '@/components/layout/AuthLayout.vue'
-import '@/assets/css/auth-signup.css'
 
 const HOST = ''
 
@@ -195,5 +194,5 @@ export default {
 }
 </script>
 
-<style scoped>
+<style scoped src="@/assets/css/auth-signup.css">
 </style>
