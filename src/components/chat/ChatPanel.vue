@@ -2,6 +2,40 @@
   <div class="panel">
     <header class="header">
       <div class="title">{{ roomTitle }}</div>
+
+      <div class="chat-panel">
+        <header class="chat-panel__header">
+          <div class="chat-panel__title">{{ displayRoomTitle }}</div>
+
+          <ChatRoomSettingsMenu
+              v-if="roomId"
+              :room-id="roomId"
+              :notification-enabled="roomNotificationEnabled"
+              @edit-room-name="openEditRoomNameModal"
+              @toggle-notification="toggleRoomNotification"
+              @leave-room="openLeaveRoomModal"
+          />
+        </header>
+
+        <!-- 기존 메시지 영역 -->
+        <section class="chat-panel__messages">
+          ...
+        </section>
+
+        <EditRoomNameModal
+            v-model="editRoomNameModalOpen"
+            :room-id="roomId"
+            :initial-room-name="customRoomName"
+            @saved="handleRoomNameSaved"
+        />
+
+        <LeaveRoomConfirmModal
+            v-model="leaveRoomModalOpen"
+            :room-id="roomId"
+            @confirmed="handleRoomLeft"
+        />
+      </div>
+
       <button class="icon" @click="$router.push({ name: 'homeEmpty' })">✕</button>
     </header>
 
