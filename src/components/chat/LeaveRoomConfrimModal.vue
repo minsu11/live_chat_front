@@ -15,7 +15,7 @@
 </template>
 
 <script>
-import { leaveRoom } from '@/api/chat-room-settings.js';
+import { leaveRoom } from '@/assets/js/chat-room-settings.js';
 
 export default {
   name: 'LeaveRoomConfirmModal',

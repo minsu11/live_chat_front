@@ -1,43 +1,34 @@
 <template>
   <div class="panel">
-    <header class="header">
-      <div class="title">{{ roomTitle }}</div>
+    <header class="header chat-header-fixed">
+      <div class="header-left-content">
+        <div class="title">{{ roomTitle }}</div>
 
-      <div class="chat-panel">
-        <header class="chat-panel__header">
-          <div class="chat-panel__title">{{ displayRoomTitle }}</div>
-
-          <ChatRoomSettingsMenu
-              v-if="roomId"
-              :room-id="roomId"
-              :notification-enabled="roomNotificationEnabled"
-              @edit-room-name="openEditRoomNameModal"
-              @toggle-notification="toggleRoomNotification"
-              @leave-room="openLeaveRoomModal"
-          />
-        </header>
-
-        <!-- 기존 메시지 영역 -->
-        <section class="chat-panel__messages">
-          ...
-        </section>
-
-        <EditRoomNameModal
-            v-model="editRoomNameModalOpen"
+        <ChatRoomSettingsMenu
+            v-if="roomId"
             :room-id="roomId"
-            :initial-room-name="customRoomName"
-            @saved="handleRoomNameSaved"
-        />
-
-        <LeaveRoomConfirmModal
-            v-model="leaveRoomModalOpen"
-            :room-id="roomId"
-            @confirmed="handleRoomLeft"
+            :notification-enabled="roomNotificationEnabled"
+            @edit-room-name="openEditRoomNameModal"
+            @toggle-notification="toggleRoomNotification"
+            @leave-room="openLeaveRoomModal"
         />
       </div>
 
       <button class="icon" @click="$router.push({ name: 'homeEmpty' })">✕</button>
     </header>
+
+    <EditRoomNameModal
+        v-model="editRoomNameModalOpen"
+        :room-id="roomId"
+        :initial-room-name="roomTitle"
+        @saved="handleRoomNameSaved"
+    />
+
+    <LeaveRoomConfirmModal
+        v-model="leaveRoomModalOpen"
+        :room-id="roomId"
+        @confirmed="handleRoomLeft"
+    />
 
     <section class="messages" ref="list">
       <div v-if="loading" class="empty">불러오는 중...</div>
@@ -49,7 +40,6 @@
           class="msg"
           :class="{ mine: m.mine, compact: m.groupedTop }"
       >
-        <!-- 상대 메시지: 마지막 메시지일 때만 아바타 -->
         <div v-if="!m.mine" class="avatar-slot">
           <div v-if="m.showAvatar" class="avatar">
             <img :src="m.profileImageUrl || defaultImage" alt="profile" />
@@ -57,11 +47,9 @@
         </div>
 
         <div class="msg-body" :class="{ mine: m.mine }">
-          <!-- 상대 메시지: 묶음 첫 메시지일 때만 이름 -->
           <div v-if="m.showName" class="name">{{ m.name }}</div>
 
           <div class="message-row" :class="{ mine: m.mine }">
-            <!-- 내 메시지: unread/time을 버블 왼쪽 -->
             <template v-if="m.mine && m.showMeta">
               <transition name="unread-pop">
                 <div
@@ -108,7 +96,6 @@
               <div v-else class="text">{{ m.text }}</div>
             </div>
 
-            <!-- 상대 메시지: unread/time을 버블 오른쪽 -->
             <template v-if="!m.mine && m.showMeta">
               <div class="meta">{{ format(m.at) }}</div>
               <transition name="unread-pop">
@@ -170,7 +157,6 @@
       </div>
     </footer>
 
-    <!-- 파일 전송 확인 모달 -->
     <div
         v-if="pendingFile"
         class="file-confirm-overlay"
@@ -228,9 +214,13 @@ import {addReconnectListener, sendMessage, registerSubscription} from '@/service
 import emojiRegex from 'emoji-regex';
 import DefaultImage from '@/assets/default_image.png';
 import { uploadChatImage, uploadChatFile } from '@/assets/js/chat-file.js';
+import ChatRoomSettingsMenu from "@/components/chat/ChatRoomSettingMenu.vue";
+import EditRoomNameModal from "@/components/chat/EditRoomNameModal.vue";
+import LeaveRoomConfirmModal from "@/components/chat/LeaveRoomConfrimModal.vue";
 
 export default {
   name: 'ChatPanel',
+  components: {LeaveRoomConfirmModal, EditRoomNameModal, ChatRoomSettingsMenu},
 
   data() {
     return {
@@ -255,6 +245,10 @@ export default {
       uploadingFile: false,
       fileError: '',
       fileValidationError: '',
+      editRoomNameModalOpen: false,
+      leaveRoomModalOpen: false,
+      roomNotificationEnabled: false,
+
     };
   },
 
@@ -954,6 +948,38 @@ export default {
       return '';
     },
 
+    openEditRoomNameModal() {
+      this.editRoomNameModalOpen = true;
+    },
+
+    openLeaveRoomModal() {
+      this.leaveRoomModalOpen = true;
+    },
+
+    toggleRoomNotification() {
+      console.log('알림 토글 클릭됨 (다음 작업에서 구현 예정)');
+    },
+
+    // 🎯 방 이름 변경 모달에서 '저장' 성공 시 호출됨
+    handleRoomNameSaved(result) {
+      // 1. 현재 열려있는 채팅방 헤더의 타이틀을 즉시 업데이트 (로컬 패치)
+      // 백엔드 응답이 { roomId: 1, displayName: "변경된 이름" } 형태로 온다고 가정
+      if (result && result.displayName) {
+        this.roomTitle = result.displayName;
+      }
+
+      // 2. Sidebar의 대화방 목록(ChatList)도 이름이 바뀌어야 하므로 부모로 이벤트 에밋!
+      this.$emit('room-title-updated', {
+        roomId: this.roomId,
+        newTitle: result.displayName
+      });
+    },
+
+    handleRoomLeft(roomId) {
+      // 방 나가기 로직 (추후 구현)
+      this.$router.push({ name: 'homeEmpty' });
+    },
+
 
   },
 
@@ -972,24 +998,41 @@ export default {
   min-height: 0;
 }
 
+/* 💡 기존의 불필요한 .chat-panel 관련 스타일 전부 삭제! */
+
 .header {
-  height: 52px;
-  flex-shrink: 0;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 0 12px;
+  justify-content: space-between; /* 양끝 정렬 */
+  padding: 0 16px;
+  height: 60px; /* 높이 고정 */
   border-bottom: 1px solid #e9ecef;
+  background: #fff;
+}
+
+.header-left-content {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 0; /* 💡 말줄임표(text-overflow)를 적용하기 위해 필수! (overflow: hidden은 지워야 함) */
 }
 
 .title {
-  font-weight: 600;
+  font-size: 18px;
+  font-weight: bold;
+  margin-right: 4px; /* ⚙️ 아이콘과의 간격 */
+
+  /* 💡 긴 제목 말줄임표 처리 */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .icon {
   background: transparent;
   border: none;
   cursor: pointer;
+  padding: 8px;
 }
 
 .messages {
