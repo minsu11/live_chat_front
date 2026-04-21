@@ -30,66 +30,6 @@
         @confirmed="handleRoomLeft"
     />
 
-<!--    <section class="messages" ref="list">-->
-<!--      <div v-if="loading" class="empty">불러오는 중...</div>-->
-<!--      <div v-else-if="messages.length === 0" class="empty">아직 메시지가 없습니다.</div>-->
-
-<!--      <div v-for="m in decoratedMessages" :key="m.id">-->
-<!--        <div v-if="m.messageType === 'SYSTEM_LEAVE'" class="system-message-wrapper">-->
-<!--          <span class="system-message">{{ m.content }}</span>-->
-<!--        </div>-->
-
-<!--        <div v-else class="msg" :class="{ mine: m.mine, compact: m.groupedTop }">-->
-<!--          <div v-if="!m.mine" class="avatar-slot">-->
-<!--            <div v-if="m.showAvatar" class="avatar">-->
-<!--              <img :src="m.profileImageUrl || defaultImage" alt="profile" />-->
-<!--            </div>-->
-<!--          </div>-->
-
-<!--          <div class="msg-body" :class="{ mine: m.mine }">-->
-<!--            <div v-if="m.showName" class="name">{{ m.name }}</div>-->
-
-<!--            <div class="message-row" :class="{ mine: m.mine }">-->
-<!--              <template v-if="m.mine && m.showMeta">-->
-<!--                <transition name="unread-pop">-->
-<!--                  <div v-if="m.unreadCount > 0" :key="`u-${m.id}-${m.unreadCount}`" class="unread-mark left">-->
-<!--                    {{ m.unreadCount }}-->
-<!--                  </div>-->
-<!--                </transition>-->
-<!--                <div class="meta">{{ format(m.at) }}</div>-->
-<!--              </template>-->
-
-<!--              <div class="bubble" :class="{ mine: m.mine, groupedTop: m.groupedTop, groupedBottom: m.groupedBottom }">-->
-<!--                <div v-if="m.type === 'EMOJI'" class="emoji-text">{{ m.text }}</div>-->
-
-<!--                <img v-else-if="m.type === 'IMAGE'" :src="m.text" alt="chat-image" class="chat-image" />-->
-
-<!--                <div v-else-if="m.type === 'FILE'" class="file-message">-->
-<!--                  <a :href="getFileDownloadUrl(m.text)" class="file-link">-->
-<!--                    📎 {{ getFileDisplay(m.text).fileName }}-->
-<!--                  </a>-->
-<!--                  <div v-if="getFileDisplay(m.text).fileSize != null" class="file-size">-->
-<!--                    {{ formatFileSize(getFileDisplay(m.text).fileSize) }}-->
-<!--                  </div>-->
-<!--                </div>-->
-
-<!--                <div v-else class="text">{{ m.text }}</div>-->
-<!--              </div>-->
-
-<!--              <template v-if="!m.mine && m.showMeta">-->
-<!--                <div class="meta">{{ format(m.at) }}</div>-->
-<!--                <transition name="unread-pop">-->
-<!--                  <div v-if="m.unreadCount > 0" :key="`u-${m.id}-${m.unreadCount}`" class="unread-mark right">-->
-<!--                    {{ m.unreadCount }}-->
-<!--                  </div>-->
-<!--                </transition>-->
-<!--              </template>-->
-<!--            </div>-->
-<!--          </div>-->
-<!--        </div>-->
-<!--      </div>-->
-<!--    </section>-->
-
     <section class="messages" ref="list">
       <div v-if="loading" class="empty">불러오는 중...</div>
       <div v-else-if="messages.length === 0" class="empty">아직 메시지가 없습니다.</div>
@@ -98,6 +38,10 @@
 
         <div v-if="m.type === 'SYSTEM_LEAVE'" class="system-message-wrapper">
           <span class="system-message">{{ m.content || m.text }}</span>
+        </div>
+
+        <div v-else-if="m.type === 'SYSTEM_INVITE'" class="system-message-wrapper">
+          <span class="system-message">{{ parseInviteMessage(m.content) }}</span>
         </div>
 
         <div v-else class="msg" :class="{ mine: m.mine, compact: m.groupedTop }">
@@ -1037,7 +981,46 @@ export default {
 
       this.$router.push({ name: 'homeEmpty' });
     },
+    parseInviteMessage(jsonString) {
+      if (!jsonString) return "새로운 대화 상대가 초대되었습니다.";
 
+      try {
+        // 1. JSON 파싱
+        const data = JSON.parse(jsonString);
+
+        // (만약 에러나서 fallback 문자열이 온 경우)
+        if (data.fallback) return data.fallback;
+
+        // 2. 닉네임 결정 함수 (내 친구 목록에서 커스텀 닉네임 찾기)
+        const resolveName = (userInfo) => {
+          // 💡 주의: this.myFriends 부분은 세인님의 실제 친구 목록 변수명으로 변경해야 합니다.
+          // (예: Vuex/Pinia를 쓴다면 this.$store.state.friends 등)
+          // 만약 현재 컴포넌트에서 친구 목록을 모른다면, 그냥 서버가 보내준 userInfo.name을 반환하면 됩니다.
+          const friendList = this.$root.friends || []; // 임시 방편 (실제 구조에 맞게 수정 필요)
+
+          const friend = friendList.find(f => f.uuid === userInfo.uuid);
+
+          // 친구로 등록되어 있고 커스텀 닉네임이 있다면 그걸 쓰고, 아니면 원래 이름 사용
+          return friend ? (friend.nickName || friend.name) : userInfo.name;
+        };
+
+        // 3. 초대자 이름 변환
+        const inviterName = resolveName(data.inviter);
+
+        // 4. 피초대자들 이름 변환 및 콤마 연결
+        const inviteeNames = data.invitees.map(resolveName).join(", ");
+
+        // 5. 최종 문자열 조립
+        return `${inviterName}님이 ${inviteeNames}님을 초대했습니다.`;
+
+      } catch (e) {
+        console.error("초대 메시지 파싱 실패 (일반 텍스트일 수도 있음):", e, jsonString);
+        // 만약 예전 방식(일반 문자열)으로 저장된 데이터가 있다면 그냥 그대로 출력
+        return typeof jsonString === 'string' && !jsonString.startsWith('{')
+            ? jsonString
+            : "새로운 대화 상대가 초대되었습니다.";
+      }
+    },
 
   },
 

@@ -29,6 +29,11 @@
           <span class="text">{{ notificationEnabled ? '알림 끄기' : '알림 켜기' }}</span>
         </button>
 
+        <button class="menu-item" @click="openInviteModal">
+          <span class="icon">➕</span>
+          <span class="text">대화 상대 초대</span>
+        </button>
+
         <div class="divider"></div>
 
         <button class="menu-item danger" @click="emitLeaveRoom">
@@ -36,13 +41,22 @@
           <span class="text">채팅방 나가기</span>
         </button>
       </div>
+      <GroupChatCreateModal
+      v-if="showInviteModal"
+      :friends="inviteableFriends"
+      @close="showInviteModal = false"
+      @submit="handleInviteSubmit"
+      />
     </div>
   </div>
 </template>
 
 <script>
+import GroupChatCreateModal from "@/components/sidebar/GroupChatCreateModal.vue";
 export default {
   name: 'ChatRoomSettingsMenu',
+  components:{GroupChatCreateModal}
+  ,
   props: {
     roomId: {
       type: [Number, String],
@@ -73,6 +87,50 @@ export default {
     emitLeaveRoom() {
       this.open = false;
       this.$emit('leave-room');
+    },
+
+    async openInviteModal() {
+      try {
+        // 1. 현재 방에 있는 멤버 목록을 가져옵니다. (백엔드에 GET /v1/chat-room/{roomId}/members API가 있다고 가정)
+        const members = await api.get(`/v1/chat-room/${this.roomId}/members`);
+        const memberUuids = members.map(m => m.uuid);
+
+        // 2. 내 친구 목록을 가져옵니다.
+        const friendsRes = await api.get('/v1/friends', { params: { limit: 100 } });
+        const allFriends = friendsRes.items || [];
+
+        // 3. 내 친구 중 '이미 방에 있는 사람'은 제외합니다.
+        this.inviteableFriends = allFriends.filter(f => !memberUuids.includes(f.uuid));
+
+        if (this.inviteableFriends.length === 0) {
+          alert('초대할 수 있는 친구가 없습니다. (모두 이미 방에 있습니다)');
+          return;
+        }
+
+        // 4. 모달을 엽니다.
+        this.showInviteModal = true;
+      } catch (e) {
+        console.error('초대 목록을 불러오는데 실패했습니다.', e);
+      }
+    },
+
+    // 💡 추가: 모달에서 '생성/초대' 버튼을 눌렀을 때
+    async handleInviteSubmit({ memberUuids }) {
+      if (!memberUuids || memberUuids.length === 0) return;
+
+      try {
+        // 백엔드 초대 API 호출
+        await api.post(`/v1/chat-room/${this.roomId}/invite`, memberUuids);
+
+        this.showInviteModal = false;
+        this.open = false; // 설정 서랍 닫기
+        alert('성공적으로 초대했습니다!');
+        // (필요하다면 this.$emit('toast', ...) 로 교체)
+
+      } catch (e) {
+        console.error('초대 실패:', e);
+        alert('초대에 실패했습니다.');
+      }
     },
   },
 };
