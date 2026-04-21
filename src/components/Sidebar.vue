@@ -48,19 +48,6 @@
       </p>
     </div>
 
-    <!-- 친구 검색 -->
-    <div v-if="currentView === 'friends'" class="search-box">
-      <v-text-field
-          v-model="kwProxy"
-          dense
-          hide-details
-          placeholder="친구 검색"
-          prepend-inner-icon="mdi-magnify"
-          outlined
-          clearable
-          class="search-input"
-      />
-    </div>
 
     <!-- 대화방 헤더 -->
     <div v-if="currentView === 'chats'" class="chat-header">
@@ -68,20 +55,13 @@
       <button class="chat-create-btn" @click="openCreateGroupModal">+</button>
     </div>
 
-    <!-- 검색 결과 -->
-    <SearchResults
-        v-if="currentView === 'friends' && hasKw"
-        :keyword="kw"
-        @add-friend="addFriend"
-        @open-profile="openProfile"
-    />
+
 
     <!-- 리스트 -->
     <div class="list-container">
       <FriendList
-          v-if="currentView === 'friends' && !hasKw"
+          v-if="currentView === 'friends'"
           :friends="friends"
-          :keyword="kw"
           @open-chat="$emit('open-chat', $event)"
           @open-profile="openProfile"
           @remove-friend="handleRemoveFriend"
@@ -118,7 +98,6 @@
 
 <script>
 import ChatList from '@/components/sidebar/ChatList.vue';
-import SearchResults from '@/components/search/SearchResults.vue';
 import FriendList from '@/components/sidebar/FriendList.vue';
 import ProfileModal from '@/components/sidebar/ProfileModal.vue';
 import GroupChatCreateModal from '@/components/sidebar/GroupChatCreateModal.vue';
@@ -130,7 +109,6 @@ export default {
   name: 'Sidebar',
   components: {
     ChatList,
-    SearchResults,
     FriendList,
     ProfileModal,
     GroupChatCreateModal
@@ -155,7 +133,6 @@ export default {
   },
   data() {
     return {
-      searchKeyword: '',
       selectedProfile: null,
       defaultProfile,
 
@@ -174,20 +151,6 @@ export default {
     await this.loadFriends();
   },
   computed: {
-    kwProxy: {
-      get() {
-        return this.searchKeyword ?? '';
-      },
-      set(v) {
-        this.searchKeyword = (v ?? '').toString();
-      }
-    },
-    kw() {
-      return (this.searchKeyword ?? '').trim();
-    },
-    hasKw() {
-      return this.kw.length > 0;
-    },
     notificationStatusText() {
       switch (this.notificationPermission) {
         case 'granted':

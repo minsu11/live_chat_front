@@ -122,7 +122,18 @@
 
               <div class="bubble" :class="{ mine: m.mine, groupedTop: m.groupedTop, groupedBottom: m.groupedBottom }">
                 <div v-if="m.type === 'EMOJI'" class="emoji-text">{{ m.text }}</div>
+
                 <img v-else-if="m.type === 'IMAGE'" :src="m.text" alt="chat-image" class="chat-image" />
+
+                <div v-else-if="m.type === 'FILE'" class="file-message">
+                  <a :href="getFileDownloadUrl(m.text)" class="file-link" target="_blank">
+                    📎 {{ getFileDisplay(m.text).fileName }}
+                  </a>
+                  <div v-if="getFileDisplay(m.text).fileSize != null" class="file-size">
+                    {{ formatFileSize(getFileDisplay(m.text).fileSize) }}
+                  </div>
+                </div>
+
                 <div v-else class="text">{{ m.text }}</div>
               </div>
 
@@ -349,9 +360,10 @@ export default {
     },
 
     mapMessage(m) {
+      const rawType = m.messageType || m.type || 'TEXT';
       return {
         id: m.id ?? m.messageId,
-        type: m.messageType ?? m.type ?? 'TEXT',
+        type: rawType.toUpperCase(),
         name: m.senderNickname ?? m.sender?.senderNickname ?? '',
         text: m.content ?? m.text ?? '',
         at: m.createdAt ?? m.at ?? new Date().toISOString(),
@@ -484,12 +496,12 @@ export default {
               if (this.messages.some(m => String(m.id) === String(messageId))) {
                 return;
               }
-
+              const rawType = msg.messageType || msg.type ||'TEXT';
               const mine = msg.sender?.mine ?? msg.mine ?? false;
 
               this.messages.push({
                 id: messageId,
-                type: msg.messageType ?? 'TEXT',
+                type: rawType.toUpperCase(),
                 name: msg.sender?.senderNickname ?? '',
                 text: msg.content ?? msg.text ?? '',
                 at: msg.createdAt ?? new Date().toISOString(),
@@ -1324,6 +1336,10 @@ export default {
   border-radius: 12px;
   object-fit: cover;
   cursor: pointer;
+  width: 100%;
+
+  aspect-ratio: 4 / 3;
+  background-color: #f1f3f5;
 }
 
 .file-message {

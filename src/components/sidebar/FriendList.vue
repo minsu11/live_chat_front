@@ -1,7 +1,19 @@
 <template>
   <section class="friend-list">
-    <p class="section-title">👥 친구 목록</p>
+    <section class="friend-list">
+      <div class="header-row">
+        <p class="section-title">👥 친구 목록</p>
+        <button class="add-friend-btn" @click="isSearchModalOpen = true">
+          <v-icon>mdi-account-search</v-icon> 찾기
+        </button>
+      </div>
 
+      <SearchUserModal
+          v-model="isSearchModalOpen"
+          @toast="$emit('toast', $event)"
+          @friend-added="refreshFriends"
+      />
+    </section>
     <div v-if="loading" class="loading">불러오는 중...</div>
 
     <div v-else-if="friends.length > 0" class="friends">
@@ -26,10 +38,11 @@
 <script>
 import { getFriends } from '@/assets/js/friend.js';
 import FriendCard from './FriendCard.vue';
-
+import SearchUserModal from '@/components/search/SearchUserModal.vue';
+import {ref} from "vue";
 export default {
   name: 'FriendList',
-  components: { FriendCard },
+  components: { FriendCard, SearchUserModal },
   props: {
     friends: {
       type: Array,
@@ -47,12 +60,20 @@ export default {
       hasNext: false,
       loading: false,
       loadingMore: false,
+      isSearchModalOpen: false,
+
     };
   },
   async mounted() {
     await this.loadFriends();
   },
   methods: {
+    ref,
+    async refreshFriends() {
+      this.next = null;
+
+      await this.loadFriends();
+    },
     async loadFriends() {
       this.loading = true;
       try {
@@ -112,4 +133,26 @@ export default {
 button {
   margin-top: 1rem;
 }
+
+.header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-right: 10px;
+}
+.add-friend-btn {
+  background: transparent;
+  border: none;
+  color: #4dabf7;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.add-friend-btn:hover {
+  text-decoration: underline;
+}
+
 </style>
