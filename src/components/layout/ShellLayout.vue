@@ -1,6 +1,7 @@
 <template>
   <div class="chat-layout">
     <Sidebar
+        ref="sidebar"
         :current-view="currentView"
         :chats="chats"
         :me="me"
@@ -12,7 +13,11 @@
         @toast="showToast"
     />
 
-    <router-view />
+    <router-view
+      @room-title-updated="handleRoomTitleUpdated"
+      @room-muted-updated="handleRoomMutedUpdated"
+      @room-left="handleRoomLeft"
+    />
 
     <MenuDropdown />
 
@@ -170,8 +175,13 @@ export default {
     },
 
     async loadChats() {
-      const {items} = await fetchChats();
-      this.chats = items;
+      const { items } = await fetchChats();
+      // 서버에서 온 items 내부의 각 객체에 muted 정보가 들어있는지 확인!
+      this.chats = items.map(item => ({
+        ...item,
+        // 서버가 muted를 주면 그대로 쓰고, 없으면 기본값 false(알림 켬) 처리
+        muted: item.muted ?? false
+      }));
     },
 
     findRoomTitle(roomId) {
@@ -211,6 +221,13 @@ export default {
 
     async handleGlobalSummaryEvent(event) {
       if (!event?.roomId) return;
+
+// 💡 [추가된 로직] 알림 차단(Mute) 상태인지 확인
+      const targetRoom = this.chats.find(c => String(c.id || c.roomId) === String(event.roomId));
+      if (targetRoom && targetRoom.muted) {
+        console.log(`🔕 [알림 차단됨] ${event.roomId}번 방은 알림이 꺼져 있습니다.`);
+        return;
+      }
 
       const currentRoomId = this.$route.params.roomId;
       const isCurrentRoom =
@@ -261,6 +278,23 @@ export default {
         await this.openChat(payload.roomId);
         notification.close();
       };
+    },
+
+    handleRoomMutedUpdated({ roomId, isMuted }) {
+      // 💡 배열의 요소를 통째로 교체해서 Vue가 100% 변화를 감지하게 만듦!
+      const targetIndex = this.chats.findIndex(c => String(c.id || c.roomId) === String(roomId));
+
+      if (targetIndex !== -1) {
+        this.chats[targetIndex] = {
+          ...this.chats[targetIndex],
+          muted: isMuted
+        };
+        console.log(`[상태 동기화] ${roomId}번 방 muted 상태가 ${isMuted}로 변경됨!`);
+      }
+
+      if (this.$refs.sidebar && typeof this.$refs.sidebar.updateSidebarRoomMuted === 'function') {
+        this.$refs.sidebar.updateSidebarRoomMuted({ roomId, isMuted });
+      }
     },
 
     showChatToast(payload) {
@@ -325,6 +359,19 @@ export default {
       this.chatToast = null;
 
       await this.openChat(roomId);
+    },
+
+    // 🎯 ChatPanel에서 이름이 바뀌었다고 신호가 오면 실행됨
+    handleRoomTitleUpdated(payload) {
+      // 사이드바의 업데이트 메서드를 찔러서 소식을 전달!
+      if (this.$refs.sidebar) {
+        this.$refs.sidebar.updateSidebarRoomTitle(payload);
+      }
+    },
+
+    handleRoomLeft(roomId){
+      this.chats = this.chats.filter(c=> String(c.id || c.roomId) !== String(roomId));
+
     },
 
     onSearchFriend(keyword) {

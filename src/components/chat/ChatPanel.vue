@@ -30,86 +30,113 @@
         @confirmed="handleRoomLeft"
     />
 
+<!--    <section class="messages" ref="list">-->
+<!--      <div v-if="loading" class="empty">불러오는 중...</div>-->
+<!--      <div v-else-if="messages.length === 0" class="empty">아직 메시지가 없습니다.</div>-->
+
+<!--      <div v-for="m in decoratedMessages" :key="m.id">-->
+<!--        <div v-if="m.messageType === 'SYSTEM_LEAVE'" class="system-message-wrapper">-->
+<!--          <span class="system-message">{{ m.content }}</span>-->
+<!--        </div>-->
+
+<!--        <div v-else class="msg" :class="{ mine: m.mine, compact: m.groupedTop }">-->
+<!--          <div v-if="!m.mine" class="avatar-slot">-->
+<!--            <div v-if="m.showAvatar" class="avatar">-->
+<!--              <img :src="m.profileImageUrl || defaultImage" alt="profile" />-->
+<!--            </div>-->
+<!--          </div>-->
+
+<!--          <div class="msg-body" :class="{ mine: m.mine }">-->
+<!--            <div v-if="m.showName" class="name">{{ m.name }}</div>-->
+
+<!--            <div class="message-row" :class="{ mine: m.mine }">-->
+<!--              <template v-if="m.mine && m.showMeta">-->
+<!--                <transition name="unread-pop">-->
+<!--                  <div v-if="m.unreadCount > 0" :key="`u-${m.id}-${m.unreadCount}`" class="unread-mark left">-->
+<!--                    {{ m.unreadCount }}-->
+<!--                  </div>-->
+<!--                </transition>-->
+<!--                <div class="meta">{{ format(m.at) }}</div>-->
+<!--              </template>-->
+
+<!--              <div class="bubble" :class="{ mine: m.mine, groupedTop: m.groupedTop, groupedBottom: m.groupedBottom }">-->
+<!--                <div v-if="m.type === 'EMOJI'" class="emoji-text">{{ m.text }}</div>-->
+
+<!--                <img v-else-if="m.type === 'IMAGE'" :src="m.text" alt="chat-image" class="chat-image" />-->
+
+<!--                <div v-else-if="m.type === 'FILE'" class="file-message">-->
+<!--                  <a :href="getFileDownloadUrl(m.text)" class="file-link">-->
+<!--                    📎 {{ getFileDisplay(m.text).fileName }}-->
+<!--                  </a>-->
+<!--                  <div v-if="getFileDisplay(m.text).fileSize != null" class="file-size">-->
+<!--                    {{ formatFileSize(getFileDisplay(m.text).fileSize) }}-->
+<!--                  </div>-->
+<!--                </div>-->
+
+<!--                <div v-else class="text">{{ m.text }}</div>-->
+<!--              </div>-->
+
+<!--              <template v-if="!m.mine && m.showMeta">-->
+<!--                <div class="meta">{{ format(m.at) }}</div>-->
+<!--                <transition name="unread-pop">-->
+<!--                  <div v-if="m.unreadCount > 0" :key="`u-${m.id}-${m.unreadCount}`" class="unread-mark right">-->
+<!--                    {{ m.unreadCount }}-->
+<!--                  </div>-->
+<!--                </transition>-->
+<!--              </template>-->
+<!--            </div>-->
+<!--          </div>-->
+<!--        </div>-->
+<!--      </div>-->
+<!--    </section>-->
+
     <section class="messages" ref="list">
       <div v-if="loading" class="empty">불러오는 중...</div>
       <div v-else-if="messages.length === 0" class="empty">아직 메시지가 없습니다.</div>
 
-      <div
-          v-for="m in decoratedMessages"
-          :key="m.id"
-          class="msg"
-          :class="{ mine: m.mine, compact: m.groupedTop }"
-      >
-        <div v-if="!m.mine" class="avatar-slot">
-          <div v-if="m.showAvatar" class="avatar">
-            <img :src="m.profileImageUrl || defaultImage" alt="profile" />
-          </div>
+      <div v-for="m in decoratedMessages" :key="m.id">
+
+        <div v-if="m.type === 'SYSTEM_LEAVE'" class="system-message-wrapper">
+          <span class="system-message">{{ m.content || m.text }}</span>
         </div>
 
-        <div class="msg-body" :class="{ mine: m.mine }">
-          <div v-if="m.showName" class="name">{{ m.name }}</div>
+        <div v-else class="msg" :class="{ mine: m.mine, compact: m.groupedTop }">
 
-          <div class="message-row" :class="{ mine: m.mine }">
-            <template v-if="m.mine && m.showMeta">
-              <transition name="unread-pop">
-                <div
-                    v-if="m.unreadCount > 0"
-                    :key="`u-${m.id}-${m.unreadCount}`"
-                    class="unread-mark left"
-                >
-                  {{ m.unreadCount }}
-                </div>
-              </transition>
-              <div class="meta">{{ format(m.at) }}</div>
-            </template>
+          <div v-if="!m.mine" class="avatar-slot">
+            <div v-if="m.showAvatar" class="avatar">
+              <img :src="m.profileImageUrl || defaultImage" alt="profile" />
+            </div>
+          </div>
 
-            <div
-                class="bubble"
-                :class="{
-                mine: m.mine,
-                groupedTop: m.groupedTop,
-                groupedBottom: m.groupedBottom
-              }"
-            >
-              <div v-if="m.type === 'EMOJI'" class="emoji-text">{{ m.text }}</div>
+          <div class="msg-body" :class="{ mine: m.mine }">
+            <div v-if="m.showName" class="name">{{ m.name }}</div>
 
-              <img
-                  v-else-if="m.type === 'IMAGE'"
-                  :src="m.text"
-                  alt="chat-image"
-                  class="chat-image"
-              />
+            <div class="message-row" :class="{ mine: m.mine }">
 
-              <div v-else-if="m.type === 'FILE'" class="file-message">
-                <a
-                    :href="getFileDownloadUrl(m.text)"
-                    class="file-link"
-                >
-                  📎 {{ getFileDisplay(m.text).fileName }}
-                </a>
+              <template v-if="m.mine && m.showMeta">
+                <transition name="unread-pop">
+                  <div v-if="m.unreadCount > 0" class="unread-mark left">{{ m.unreadCount }}</div>
+                </transition>
+                <div class="meta">{{ format(m.at) }}</div>
+              </template>
 
-                <div v-if="getFileDisplay(m.text).fileSize != null" class="file-size">
-                  {{ formatFileSize(getFileDisplay(m.text).fileSize) }}
-                </div>
+              <div class="bubble" :class="{ mine: m.mine, groupedTop: m.groupedTop, groupedBottom: m.groupedBottom }">
+                <div v-if="m.type === 'EMOJI'" class="emoji-text">{{ m.text }}</div>
+                <img v-else-if="m.type === 'IMAGE'" :src="m.text" alt="chat-image" class="chat-image" />
+                <div v-else class="text">{{ m.text }}</div>
               </div>
 
-              <div v-else class="text">{{ m.text }}</div>
-            </div>
+              <template v-if="!m.mine && m.showMeta">
+                <div class="meta">{{ format(m.at) }}</div>
+                <transition name="unread-pop">
+                  <div v-if="m.unreadCount > 0" class="unread-mark right">{{ m.unreadCount }}</div>
+                </transition>
+              </template>
 
-            <template v-if="!m.mine && m.showMeta">
-              <div class="meta">{{ format(m.at) }}</div>
-              <transition name="unread-pop">
-                <div
-                    v-if="m.unreadCount > 0"
-                    :key="`u-${m.id}-${m.unreadCount}`"
-                    class="unread-mark right"
-                >
-                  {{ m.unreadCount }}
-                </div>
-              </transition>
-            </template>
+            </div>
           </div>
         </div>
+
       </div>
     </section>
 
@@ -439,6 +466,8 @@ export default {
         this.roomId = nextRoomId;
         this.roomTitle = data?.title ?? '채팅방';
         this.messages = (data?.messages ?? []).map(this.mapMessage);
+        this.roomNotificationEnabled = !(data?.muted ?? false);
+
 
         this.refreshLastReceivedMessageId();
 
@@ -956,8 +985,21 @@ export default {
       this.leaveRoomModalOpen = true;
     },
 
-    toggleRoomNotification() {
-      console.log('알림 토글 클릭됨 (다음 작업에서 구현 예정)');
+    async toggleRoomNotification() {
+      try {
+        const nextMutedState = this.roomNotificationEnabled; // 켜져있으면 끄기(true) 요청
+        const res = await Api.patch(`/v1/chat-room/${this.roomId}/settings/notification`, {
+          muted: nextMutedState
+        });
+
+        const isMuted = res.data?.data?.muted ?? res.data?.muted ?? nextMutedState;
+        this.roomNotificationEnabled = !isMuted;
+
+        // 🎯 부모(ShellLayout)로 이벤트 전파
+        this.$emit('room-muted-updated', { roomId: this.roomId, isMuted: isMuted });
+      } catch (e) {
+        console.error('알림 설정 변경 실패', e);
+      }
     },
 
     // 🎯 방 이름 변경 모달에서 '저장' 성공 시 호출됨
@@ -977,6 +1019,10 @@ export default {
 
     handleRoomLeft(roomId) {
       // 방 나가기 로직 (추후 구현)
+      this.leaveRoomModalOpen = false;
+
+      this.$emit('room-left', roomId);
+
       this.$router.push({ name: 'homeEmpty' });
     },
 
@@ -1411,5 +1457,20 @@ export default {
   color: #e03131;
   font-size: 13px;
   padding: 8px 12px;
+}
+
+.system-message-wrapper {
+  display: flex;
+  justify-content: center;
+  margin: 16px 0;
+  width: 100%;
+}
+.system-message {
+  background-color: #f1f3f5;
+  color: #868e96;
+  font-size: 13px;
+  padding: 6px 14px;
+  border-radius: 20px;
+  text-align: center;
 }
 </style>

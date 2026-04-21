@@ -6,10 +6,7 @@
       <li v-for="c in items" :key="c.id" class="list-li">
         <RoomCard
             :room="c"
-            @open-chat="payload => {
-            console.log('chat list open-chat', payload)
-            $emit('open-chat', { item: payload, type: 'chat' })
-          }"
+            @open-chat="payload => $emit('open-chat', { item: payload, type: 'chat' })"
         />
       </li>
     </ul>
@@ -155,6 +152,7 @@ export default {
             ?? it.lastMessage
             ?? null,
         raw: it,
+        muted: it.muted ?? false,
       };
     },
 
@@ -306,6 +304,37 @@ export default {
 
       this.upsertRoom(updated);
     },
+
+    // 🎯 부모로부터 호출받아 목록의 방 이름을 즉시 변경하는 메서드
+    updateRoomTitleLocally({ roomId, newTitle }) {
+      // 현재 가지고 있는 대화방 목록(items)에서 해당 방을 찾습니다.
+      const targetIndex = this.items.findIndex(r => String(r.id) === String(roomId));
+
+      if (targetIndex !== -1) {
+        // Vue가 확실하게 변화를 감지하도록 배열 요소를 통째로 교체합니다.
+        this.items[targetIndex] = {
+          ...this.items[targetIndex],
+          title: newTitle
+        };
+
+        console.log(`사이드바 방 이름 변경 완료: ${newTitle}`); // 💡 콘솔에 이게 찍히면 성공!
+      }
+    },
+
+    updateRoomMutedLocally({ roomId, isMuted }) {
+      const targetIndex = this.items.findIndex(r => String(r.id) === String(roomId));
+
+      if (targetIndex !== -1) {
+        // Vue 반응성을 위해 통째로 교체
+        this.items[targetIndex] = {
+          ...this.items[targetIndex],
+          muted: isMuted
+        };
+        console.log(`[ChatList] ${roomId}번 방 알림 상태 ${isMuted}로 동기화 완료!`);
+      }
+    },
+
+
   },
 };
 </script>

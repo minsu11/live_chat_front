@@ -4,6 +4,7 @@
     <div class="info">
       <div class="top">
         <span class="title">{{ room.title }}</span>
+        <span v-if="room.muted" class="mute-icon">🔕</span>
         <span class="time" v-if="room.lastMessageAtDisplay">{{ room.lastMessageAtDisplay }}</span>
       </div>
       <div class="preview" v-if="room.lastMessagePreview">{{ room.lastMessagePreview }}</div>

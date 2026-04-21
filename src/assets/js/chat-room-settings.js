@@ -9,5 +9,5 @@ export async function updateRoomNotification(roomId, payload) {
 }
 
 export async function leaveRoom(roomId) {
-    return await api.delete(`/v1/chat-room/${roomId}/settings/me`);
+    return await api.delete(`/v1/chat-room/${roomId}/settings/leave`);
 }

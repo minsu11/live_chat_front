@@ -89,6 +89,7 @@
 
       <ChatList
           v-else-if="currentView === 'chats'"
+          ref="chatList"
           :active-room-id="$route.params.roomId"
           @open-chat="$emit('open-chat', $event)"
       />
@@ -350,6 +351,18 @@ export default {
       } catch (err) {
         console.error('프로필 수정 실패', err);
         this.$emit('toast', '프로필 수정에 실패했어요');
+      }
+    },
+
+    updateSidebarRoomTitle(payload) {
+      if (this.$refs.chatList) {
+        this.$refs.chatList.updateRoomTitleLocally(payload);
+      }
+    },
+    updateSidebarRoomMuted(payload) {
+      if (this.$refs.chatList) {
+        // 자식 컴포넌트인 ChatList의 메서드를 호출합니다.
+        this.$refs.chatList.updateRoomMutedLocally(payload);
       }
     },
 
