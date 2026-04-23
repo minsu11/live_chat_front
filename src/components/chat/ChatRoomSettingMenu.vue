@@ -19,31 +19,45 @@
       </div>
 
       <div class="drawer-content">
-        <button class="menu-item" @click="emitEditRoomName">
-          <span class="icon">✏️</span>
-          <span class="text">채팅방 이름 변경</span>
-        </button>
+        <div class="menu-section">
+          <button class="menu-item" @click="emitEditRoomName">
+            <span class="icon">✏️</span>
+            <span class="text">채팅방 이름 변경</span>
+          </button>
+          <button class="menu-item" @click="emitToggleNotification">
+            <span class="icon">{{ notificationEnabled ? '🔕' : '🔔' }}</span>
+            <span class="text">{{ notificationEnabled ? '알림 끄기' : '알림 켜기' }}</span>
+          </button>
+        </div>
 
-        <button class="menu-item" @click="emitToggleNotification">
-          <span class="icon">{{ notificationEnabled ? '🔕' : '🔔' }}</span>
-          <span class="text">{{ notificationEnabled ? '알림 끄기' : '알림 켜기' }}</span>
-        </button>
+        <hr class="divider" />
 
-        <button class="menu-item" @click="openInviteModal">
-          <span class="icon">➕</span>
-          <span class="text">대화 상대 초대</span>
-        </button>
+        <div class="members-section">
+          <div class="section-header">
+            <h4>대화 상대 ({{ members.length }})</h4>
+            <button class="invite-btn-small" @click="openInviteModal">➕ 초대</button>
+          </div>
 
-        <div class="divider"></div>
+          <div class="member-list">
+            <div v-for="member in members" :key="member.uuid" class="member-item">
+              <img :src="member.profileUrl || defaultProfile" class="member-avatar" alt="profile" />
+              <span class="member-name">{{ member.nickname }}</span>
+              <span v-if="member.isMe" class="me-badge">나</span>
+            </div>
+          </div>
+        </div>
 
-        <button class="menu-item danger" @click="emitLeaveRoom">
-          <span class="icon">🚪</span>
-          <span class="text">채팅방 나가기</span>
+      </div>
+
+      <div class="drawer-footer">
+        <button class="leave-btn" @click="emitLeaveRoom">
+          <span class="icon">🚪</span> <span>채팅방 나가기</span>
         </button>
       </div>
       <GroupChatCreateModal
       v-if="showInviteModal"
       :friends="inviteableFriends"
+      :is-invite-mode="true"
       @close="showInviteModal = false"
       @submit="handleInviteSubmit"
       />
@@ -53,6 +67,9 @@
 
 <script>
 import GroupChatCreateModal from "@/components/sidebar/GroupChatCreateModal.vue";
+import api from "@/plugins/axios.js"
+import DefaultImage from "@/assets/default_image.png"
+
 export default {
   name: 'ChatRoomSettingsMenu',
   components:{GroupChatCreateModal}
@@ -70,7 +87,19 @@ export default {
   data() {
     return {
       open: false,
+      members: [], // 💡 멤버 목록을 담을 배열
+      showInviteModal: false,
+      inviteableFriends: [],
+      defaultProfile: DefaultImage,
     };
+  },
+  watch: {
+    // 💡 서랍이 열릴 때마다 최신 멤버 목록을 가져옵니다.
+    async open(isOpen) {
+      if (isOpen) {
+        await this.fetchMembers();
+      }
+    }
   },
   methods: {
     toggleMenu() {
@@ -92,7 +121,7 @@ export default {
     async openInviteModal() {
       try {
         // 1. 현재 방에 있는 멤버 목록을 가져옵니다. (백엔드에 GET /v1/chat-room/{roomId}/members API가 있다고 가정)
-        const members = await api.get(`/v1/chat-room/${this.roomId}/members`);
+        const members = await api.get(`/v1/chat-room/${this.roomId}/settings/members`);
         const memberUuids = members.map(m => m.uuid);
 
         // 2. 내 친구 목록을 가져옵니다.
@@ -120,7 +149,9 @@ export default {
 
       try {
         // 백엔드 초대 API 호출
-        await api.post(`/v1/chat-room/${this.roomId}/invite`, memberUuids);
+        await api.post(`/v1/chat-room/${this.roomId}/settings/invite`, {
+          memberUuids: memberUuids
+        });
 
         this.showInviteModal = false;
         this.open = false; // 설정 서랍 닫기
@@ -130,6 +161,18 @@ export default {
       } catch (e) {
         console.error('초대 실패:', e);
         alert('초대에 실패했습니다.');
+      }
+    },
+
+    async fetchMembers() {
+      try {
+        // 백엔드의 getChatroomMembers API 호출
+        const res = await api.get(`/v1/chat-room/${this.roomId}/settings/members`);
+        // axios 응답 구조에 맞춰서 꺼냅니다 (res.data 혹은 res.data.data 등)
+        console.log('member: ', res);
+        this.members = res.data?.data || res.data || res;
+      } catch (e) {
+        console.error('대화 상대 목록을 불러오지 못했습니다.', e);
       }
     },
   },
@@ -263,4 +306,91 @@ export default {
   background-color: #f1f3f5;
   margin: 8px 0;
 }
+
+.divider {
+  border: none;
+  border-top: 8px solid #f8f9fa; /* 굵은 회색 구분선 */
+  margin: 0;
+}
+
+/* 대화 상대 섹션 */
+.members-section {
+  padding: 20px;
+  flex: 1; /* 남은 공간을 모두 차지하게 함 */
+  overflow-y: auto; /* 멤버가 많으면 스크롤 생성 */
+}
+
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.section-header h4 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #868e96;
+}
+
+.invite-btn-small {
+  background: transparent;
+  border: none;
+  font-size: 13px;
+  font-weight: 600;
+  color: #4dabf7;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+}
+
+.invite-btn-small:hover {
+  background: #e7f5ff;
+}
+
+/* 멤버 리스트 아이템 */
+.member-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.member-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.member-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  object-fit: cover;
+  background-color: #f1f3f5; /* 이미지 없을 때 대비 */
+  border: 1px solid #e9ecef;
+}
+
+.member-name {
+  font-size: 15px;
+  color: #212529;
+  font-weight: 500;
+}
+
+/* '나'를 표시하는 뱃지 */
+.me-badge {
+  background: #f1f3f5;
+  color: #868e96;
+  font-size: 11px;
+  font-weight: bold;
+  padding: 2px 6px;
+  border-radius: 12px;
+  margin-left: 4px;
+}
+
+:deep(.modal-overlay),
+:deep(.modal-container){
+  z-index: 10001 !important;
+}
+
 </style>

@@ -2,7 +2,7 @@
   <div class="backdrop" @click.self="$emit('close')">
     <div class="modal">
 
-      <h3>그룹 채팅</h3>
+      <h3>{{ isInviteMode ? '대화 상대 초대' : '그룹 채팅 생성' }}</h3>
 
       <!-- 검색 -->
       <input v-model="search" placeholder="친구 검색" />
@@ -47,14 +47,20 @@
       </div>
 
       <!-- 제목 -->
-      <input v-model="title" placeholder="채팅방 이름 (선택)" />
+      <div v-if="!isInviteMode" class="title-input-wrapper">
+        <input v-model="title" placeholder="채팅방 이름 (선택사항)" />
+      </div>
 
-      <button
-          :disabled="selected.length < 2"
-          @click="submit"
-      >
-        생성
-      </button>
+      <div class="actions">
+        <button class="cancel-btn" @click="$emit('close')">취소</button>
+        <button
+            class="submit-btn"
+            @click="submit"
+            :disabled="selected.length === 0 || loading"
+        >
+          {{ loading ? '처리 중...' : (isInviteMode ? '초대' : '생성') }}
+        </button>
+      </div>
 
     </div>
   </div>
@@ -67,7 +73,11 @@ import {no} from "vuetify/locale";
 export default {
   props: {
     friends: Array,
-    loading: Boolean
+    loading: Boolean,
+    isInviteMode: {
+      type: Boolean,
+      default: false
+    },
   },
 
   data() {
@@ -125,9 +135,36 @@ export default {
 <style scoped>
 .backdrop {
   position: fixed;
-  inset: 0;
-  background: rgba(0,0,0,0.3);
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.4);
+  /* 💡 채팅 패널 헤더나 설정 서랍(9999)보다 높게 설정 */
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  /* 💡 버튼 사이의 간격을 8px 만큼 벌림 */
+  gap: 8px;
+  margin-top: 20px;
+}
+
+/* (참고) 취소 버튼 스타일이 너무 붙어 보인다면 padding 확인 */
+.cancel-btn {
+  background: #f1f3f5;
+  color: #495057;
+  border: none;
+  padding: 10px 16px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
 
 .modal {
   width: 420px;
@@ -147,6 +184,15 @@ export default {
   border: 1px solid #ddd;
 }
 
+.submit-btn {
+  background: #4dabf7;
+  color: white;
+  border: none;
+  padding: 10px 16px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 600;
+}
 /* chips */
 .chips {
   display: flex;
