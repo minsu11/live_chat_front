@@ -30,7 +30,7 @@
         @confirmed="handleRoomLeft"
     />
 
-    <section class="messages" ref="list">
+    <section class="messages" ref="list" @scroll="handleScroll">
       <div v-if="loading" class="empty">불러오는 중...</div>
       <div v-else-if="messages.length === 0" class="empty">아직 메시지가 없습니다.</div>
 
@@ -230,6 +230,9 @@ export default {
       editRoomNameModalOpen: false,
       leaveRoomModalOpen: false,
       roomNotificationEnabled: false,
+      loadingMore: false,
+      hasMorePast: true,
+      currentCursor: null,
 
     };
   },
@@ -257,6 +260,7 @@ export default {
     }
     this.removeReconnectListener?.();
     this.cleanupSubscription();
+
   },
 
   computed: {
@@ -300,6 +304,60 @@ export default {
         this.me = res?.data ?? res;
       } catch (e) {
         console.error('내 정보 조회 실패', e);
+      }
+    },
+
+    async loadPastMessages() {
+      if (!this.roomId || !this.currentCursor) return;
+
+      try {
+        this.loadingMore = true;
+        const oldestMessage = this.messages[0];
+        const cursorId = oldestMessage.id;
+        const cursorMillis = new Date(oldestMessage.at).getTime(); // 밀리초(ms) 변환
+
+        const res = await Api.get(`/v1/chat-room/${this.roomId}/messages`, {
+          params: {
+            cursor: this.currentCursor,
+            limit: 50
+          }
+        });
+
+        const data = res.data?.data || res.data || res;
+        const pastArray = data.content || data.messages || [];
+        const pastMessages = pastArray.map(this.mapMessage);
+
+        this.currentCursor = data.nextCursor;
+
+        if (pastMessages.length === 0 || !this.currentCursor) {
+          this.hasMorePast = false;
+          if(pastMessages.length === 0) return;
+        }
+
+        // 💡 스크롤 튕김 방지 (Scroll Position Retention)
+        const el = this.$refs.list;
+        const oldScrollHeight = el.scrollHeight; // 데이터 넣기 전 전체 높이
+
+        // 과거 메시지 배열 앞에 붙이기 (백엔드 정렬 순서에 따라 reverse가 필요 없을 수도 있습니다)
+        this.messages = [...pastMessages.reverse(), ...this.messages];
+
+        await this.$nextTick(); // Vue가 화면을 다시 그릴 때까지 대기
+
+        // 데이터 넣은 후 늘어난 만큼 스크롤 위치 강제 조정!
+        const newScrollHeight = el.scrollHeight;
+        el.scrollTop = newScrollHeight - oldScrollHeight;
+
+      } catch (e) {
+        console.error('과거 메시지 불러오기 실패:', e);
+      } finally {
+        this.loadingMore = false;
+      }
+    },
+
+    handleScroll(e) {
+      const { scrollTop } = e.target;
+      if (scrollTop <= 50 && this.hasMorePast && !this.loadingMore && !this.loading) {
+        this.loadPastMessages();
       }
     },
 
@@ -410,13 +468,19 @@ export default {
         this.pendingReadMessageId = null;
         this.pendingVisibleReadMessageId = null;
 
+        this.hasMorePast = true;
+        this.loadingMore = false;
+        this.currentCursor = null;
+
         const res = await Api.get(`/v1/chat-room/${nextRoomId}/enter`);
         const data = res;
-
+        this.currentCursor = data.nextCursor;
         if (String(this.currentRoomId) !== nextRoomId) {
           return;
         }
-
+        if (!this.currentCursor) {
+          this.hasMorePast = false;
+        }
         this.cleanupSubscription();
 
         this.roomId = nextRoomId;
