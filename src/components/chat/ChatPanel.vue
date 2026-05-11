@@ -12,6 +12,15 @@
             @toggle-notification="toggleRoomNotification"
             @leave-room="openLeaveRoomModal"
         />
+
+        <button
+            v-if="roomId"
+            type="button"
+            class="message-search-open"
+            @click="openMessageSearch"
+        >
+          검색
+        </button>
       </div>
 
       <button class="icon" @click="$router.push({ name: 'homeEmpty' })">✕</button>
@@ -30,11 +39,82 @@
         @confirmed="handleRoomLeft"
     />
 
+    <!-- ✅ 메시지 검색 기능 추가
+         검색창 / 결과 이동 / 더보기 / 닫기 영역.
+         카카오톡처럼 검색어 입력 후 가장 최근 결과로 이동하고,
+         ▲ ▼ 버튼으로 결과 간 이동한다. -->
+    <section v-if="searchMode" class="message-search-bar">
+      <input
+          ref="messageSearchInput"
+          v-model="searchKeyword"
+          type="text"
+          class="message-search-input"
+          placeholder="메시지 검색"
+          @input="onSearchInput"
+          @keyup.enter="searchMessages"
+          @keyup.esc="closeMessageSearch"
+      />
+
+      <span class="message-search-count">
+        <template v-if="searchLoading">검색 중...</template>
+        <template v-else-if="searchResults.length > 0">
+          {{ searchSelectedIndex + 1 }} / {{ searchResults.length }}{{ searchHasNext ? '+' : '' }}
+        </template>
+        <template v-else-if="searched">0 / 0</template>
+      </span>
+
+      <button
+          type="button"
+          class="message-search-nav"
+          :disabled="!canMoveOlderSearchResult"
+          title="더 이전 검색 결과"
+          @click="moveOlderSearchResult"
+      >
+        ▲
+      </button>
+
+      <button
+          type="button"
+          class="message-search-nav"
+          :disabled="!canMoveNewerSearchResult"
+          title="더 최근 검색 결과"
+          @click="moveNewerSearchResult"
+      >
+        ▼
+      </button>
+
+      <button
+          v-if="searchHasNext"
+          type="button"
+          class="message-search-more"
+          :disabled="searchLoading"
+          @click="loadMoreSearchResults"
+      >
+        더보기
+      </button>
+
+      <button
+          type="button"
+          class="message-search-close"
+          @click="closeMessageSearch"
+      >
+        닫기
+      </button>
+    </section>
+
+
     <section class="messages" ref="list" @scroll="handleScroll">
       <div v-if="loading" class="empty">불러오는 중...</div>
       <div v-else-if="messages.length === 0" class="empty">아직 메시지가 없습니다.</div>
 
-      <div v-for="m in decoratedMessages" :key="m.id">
+      <div v-for="m in decoratedMessages"
+           :key="m.id"
+           :ref="el => setMessageRef(m.id, el)"
+           :data-message-id="String(m.id)"
+
+           :class="{ 'search-target-message': Number(m.id) === Number(searchTargetMessageId) }"
+
+      >
 
         <div v-if="m.type === 'SYSTEM_LEAVE'" class="system-message-wrapper">
           <span class="system-message">{{ m.content || m.text }}</span>
@@ -78,7 +158,23 @@
                   </div>
                 </div>
 
-                <div v-else class="text">{{ m.text }}</div>
+                <div v-else class="text">
+                  <template v-if="searchMode && searchKeyword.trim()">
+                    <template
+                        v-for="(part, index) in getHighlightedParts(m.text)"
+                        :key="index"
+                    >
+                      <mark v-if="part.matched" class="message-search-highlight">
+                        {{ part.text }}
+                      </mark>
+                      <span v-else>{{ part.text }}</span>
+                    </template>
+                  </template>
+
+                  <template v-else>
+                    {{ m.text }}
+                  </template>
+                </div>
               </div>
 
               <template v-if="!m.mine && m.showMeta">
@@ -135,7 +231,11 @@
             @change="handleImageSelected"
         />
 
-        <button class="send" :disabled="!draft.trim()" @click="send">전송</button>
+        <button class="send"
+                :disabled="!draft.trim() || (searchMode && contextMode)"
+                @click="send">
+          전송
+        </button>
       </div>
     </footer>
 
@@ -233,7 +333,52 @@ export default {
       loadingMore: false,
       hasMorePast: true,
       currentCursor: null,
+// 검색창 표시 여부
+      searchMode: false,
 
+      // 검색어
+      searchKeyword: '',
+
+      // 검색 결과 목록
+      searchResults: [],
+
+      // 현재 선택된 검색 결과 index
+      searchSelectedIndex: -1,
+
+      // 검색 API 호출 중 여부
+      searchLoading: false,
+
+      // 검색을 한 번이라도 실행했는지 여부
+      searched: false,
+
+      // 다음 검색 페이지 cursor
+      searchCursor: null,
+
+      // 다음 검색 페이지 존재 여부
+      searchHasNext: false,
+
+      // 검색 결과 페이지 크기
+      searchLimit: 30,
+
+      // 현재 검색 결과로 선택된 메시지 ID
+      searchTargetMessageId: null,
+
+      // 현재 messages가 최신 대화 목록이 아니라 검색 context 목록인지 여부
+      contextMode: false,
+
+      // messageId -> DOM element 저장용
+      messageRefs: new Map(),
+
+      // 검색 입력 debounce timer
+      searchTimer: null,
+
+      // ✅ 검색 스크롤 안정화
+// 같은 메시지나 같은 context 안에서 다시 이동할 때도 강조 애니메이션/스크롤을 다시 실행하기 위한 값
+      searchFocusSeq: 0,
+
+// ✅ 검색 스크롤 안정화
+// 스크롤 재시도 타이머
+      searchScrollTimer: null,
     };
   },
 
@@ -258,6 +403,17 @@ export default {
       clearTimeout(this.readTimer);
       this.readTimer = null;
     }
+
+    if (this.searchTimer) {
+      clearTimeout(this.searchTimer);
+      this.searchTimer = null;
+    }
+
+    if (this.searchScrollTimer) {
+      clearTimeout(this.searchScrollTimer);
+      this.searchScrollTimer = null;
+    }
+
     this.removeReconnectListener?.();
     this.cleanupSubscription();
 
@@ -286,6 +442,26 @@ export default {
         };
       });
     },
+
+    canMoveNewerSearchResult() {
+      return this.searchResults.length > 0 && this.searchSelectedIndex > 0;
+    },
+
+    // ✅ 메시지 검색 기능 추가
+    // 더 오래된 결과는 index + 1 방향이다.
+    // 현재 로딩된 결과 끝에 도달했어도 searchHasNext=true면 이동 버튼을 활성화한다.
+    canMoveOlderSearchResult() {
+      if (this.searchResults.length === 0) {
+        return false;
+      }
+
+      if (this.searchSelectedIndex < this.searchResults.length - 1) {
+        return true;
+      }
+
+      return this.searchHasNext;
+    },
+
   },
 
   watch: {
@@ -293,6 +469,9 @@ export default {
       if (String(newRoomId) === String(oldRoomId)) {
         return;
       }
+
+      this.resetSearchState(false);
+
       await this.loadRoom(newRoomId);
     }
   },
@@ -308,6 +487,10 @@ export default {
     },
 
     async loadPastMessages() {
+      if (this.searchMode && this.contextMode) {
+        return;
+      }
+
       if (!this.roomId || !this.currentCursor) return;
 
       try {
@@ -355,6 +538,10 @@ export default {
     },
 
     handleScroll(e) {
+      if (this.searchMode && this.contextMode) {
+        return;
+      }
+
       const { scrollTop } = e.target;
       if (scrollTop <= 50 && this.hasMorePast && !this.loadingMore && !this.loading) {
         this.loadPastMessages();
@@ -456,6 +643,8 @@ export default {
         this.roomId = '';
         this.lastSentReadMessageId = null;
         this.lastReceivedMessageId = null;
+        this.resetSearchState(false);
+
         this.cleanupSubscription();
         return;
       }
@@ -471,6 +660,7 @@ export default {
         this.hasMorePast = true;
         this.loadingMore = false;
         this.currentCursor = null;
+        this.messageRefs = new Map();
 
         const res = await Api.get(`/v1/chat-room/${nextRoomId}/enter`);
         const data = res;
@@ -506,6 +696,12 @@ export default {
               }
               const rawType = msg.messageType || msg.type ||'TEXT';
               const mine = msg.sender?.mine ?? msg.mine ?? false;
+
+              if (this.searchMode && this.contextMode) {
+                console.log('[MESSAGE_SEARCH] 검색 context 화면이므로 실시간 메시지 append 생략');
+                this.updateLastReceivedMessageId(messageId);
+                return;
+              }
 
               this.messages.push({
                 id: messageId,
@@ -566,6 +762,10 @@ export default {
     },
 
     send() {
+      if (this.searchMode && this.contextMode) {
+        return;
+      }
+
       const text = this.draft.trim();
       if (!text || !this.roomId) return;
 
@@ -616,7 +816,9 @@ export default {
           console.log('[CATCH_UP] response', data);
 
           const incomingMessages = (data?.messages ?? []).map(this.mapMessage);
-          this.mergeMessages(incomingMessages);
+          if (!(this.searchMode && this.contextMode)) {
+            this.mergeMessages(incomingMessages);
+          }
 
           totalRecoveredCount += incomingMessages.length;
 
@@ -1086,6 +1288,443 @@ export default {
       }
     },
 
+    openMessageSearch() {
+      this.searchMode = true;
+
+      this.$nextTick(() => {
+        this.$refs.messageSearchInput?.focus?.();
+      });
+    },
+
+    async closeMessageSearch() {
+      const shouldReloadRoom = this.contextMode && this.roomId;
+
+      this.resetSearchState(false);
+
+      // 검색 context를 보고 있었다면 messages가 특정 메시지 주변 목록으로 교체된 상태다.
+      // 닫을 때 최신 채팅방 상태로 다시 복구한다.
+      if (shouldReloadRoom) {
+        await this.loadRoom(this.roomId);
+      }
+    },
+
+    resetSearchState(keepSearchMode = false) {
+      if (this.searchTimer) {
+        clearTimeout(this.searchTimer);
+        this.searchTimer = null;
+      }
+
+      // ✅ 검색 스크롤 안정화
+      if (this.searchScrollTimer) {
+        clearTimeout(this.searchScrollTimer);
+        this.searchScrollTimer = null;
+      }
+
+      this.searchMode = keepSearchMode;
+      this.searchKeyword = '';
+      this.searchResults = [];
+      this.searchSelectedIndex = -1;
+      this.searchLoading = false;
+      this.searched = false;
+      this.searchCursor = null;
+      this.searchHasNext = false;
+      this.searchTargetMessageId = null;
+      this.contextMode = false;
+      this.messageRefs = new Map();
+    },
+
+    onSearchInput() {
+      if (this.searchTimer) {
+        clearTimeout(this.searchTimer);
+      }
+
+      if (!this.searchKeyword.trim()) {
+        this.searchResults = [];
+        this.searchSelectedIndex = -1;
+        this.searchCursor = null;
+        this.searchHasNext = false;
+        this.searchTargetMessageId = null;
+        this.searched = false;
+        return;
+      }
+
+      // 입력 후 300ms 멈추면 자동 검색
+      this.searchTimer = setTimeout(() => {
+        this.searchMessages();
+      }, 300);
+    },
+
+    async searchMessages() {
+      const keyword = this.searchKeyword.trim();
+
+      if (!keyword || !this.roomId) {
+        this.searchResults = [];
+        this.searchSelectedIndex = -1;
+        this.searchCursor = null;
+        this.searchHasNext = false;
+        this.searchTargetMessageId = null;
+        this.searched = false;
+        return;
+      }
+
+      this.searchLoading = true;
+      this.searched = true;
+
+      try {
+        const page = await this.fetchSearchPage(null);
+
+        this.searchResults = page.items;
+        this.searchCursor = page.nextCursor;
+        this.searchHasNext = page.hasNext;
+
+        if (this.searchResults.length > 0) {
+          await this.moveToSearchResult(0);
+        } else {
+          this.searchSelectedIndex = -1;
+          this.searchTargetMessageId = null;
+        }
+      } catch (error) {
+        console.error('[MESSAGE_SEARCH] 검색 실패', error);
+
+        this.searchResults = [];
+        this.searchSelectedIndex = -1;
+        this.searchCursor = null;
+        this.searchHasNext = false;
+        this.searchTargetMessageId = null;
+      } finally {
+        this.searchLoading = false;
+      }
+    },
+
+    async fetchSearchPage(cursor) {
+      const keyword = this.searchKeyword.trim();
+
+      const page = await Api.get(`/v1/chat-room/${this.roomId}/messages/search`, {
+        params: {
+          keyword,
+          cursor,
+          limit: this.searchLimit,
+        },
+      });
+      console.log('page: ', page);
+      // 서버가 아직 List 응답이면 방어 처리
+      if (Array.isArray(page)) {
+        return {
+          items: page,
+          nextCursor: null,
+          hasNext: false,
+        };
+      }
+
+      return {
+        items: page?.items || [],
+        nextCursor: page?.nextCursor || null,
+        hasNext: page?.hasNext === true,
+      };
+    },
+
+    async loadMoreSearchResults() {
+      if (!this.searchHasNext || this.searchLoading) {
+        return;
+      }
+
+      this.searchLoading = true;
+
+      try {
+        const page = await this.fetchSearchPage(this.searchCursor);
+
+        this.searchResults = [
+          ...this.searchResults,
+          ...page.items,
+        ];
+
+        this.searchCursor = page.nextCursor;
+        this.searchHasNext = page.hasNext;
+      } catch (error) {
+        console.error('[MESSAGE_SEARCH] 추가 검색 실패', error);
+      } finally {
+        this.searchLoading = false;
+      }
+    },
+
+    async moveNewerSearchResult() {
+      if (!this.canMoveNewerSearchResult) {
+        return;
+      }
+
+      await this.moveToSearchResult(this.searchSelectedIndex - 1);
+    },
+
+    async moveOlderSearchResult() {
+      if (this.searchResults.length === 0) {
+        return;
+      }
+
+      const nextIndex = this.searchSelectedIndex + 1;
+
+      if (nextIndex < this.searchResults.length) {
+        await this.moveToSearchResult(nextIndex);
+        return;
+      }
+
+      if (this.searchHasNext) {
+        const oldLength = this.searchResults.length;
+
+        await this.loadMoreSearchResults();
+
+        if (this.searchResults.length > oldLength) {
+          await this.moveToSearchResult(oldLength);
+        }
+      }
+    },
+
+    async moveToSearchResult(index) {
+      if (index < 0 || index >= this.searchResults.length) {
+        return;
+      }
+
+      const target = this.searchResults[index];
+
+      if (!target?.messageId) {
+        return;
+      }
+
+      this.searchSelectedIndex = index;
+      this.searchTargetMessageId = target.messageId;
+
+      await this.loadMessageContext(target.messageId);
+    },
+
+    async loadMessageContext(messageId) {
+      try {
+        const context = await Api.get(
+            `/v1/chat-room/${this.roomId}/messages/${messageId}/context`,
+            {
+              params: {
+                limit: 50,
+              },
+            }
+        );
+
+        this.contextMode = true;
+        this.messageRefs = new Map();
+
+        const contextMessages = context?.messages || [];
+
+        this.messages = contextMessages
+        .map((message) => this.mapMessage(message))
+        .sort((a, b) => {
+          const timeA = new Date(a.at).getTime();
+          const timeB = new Date(b.at).getTime();
+
+          if (timeA === timeB) {
+            return Number(a.id) - Number(b.id);
+          }
+
+          return timeA - timeB;
+        });
+
+        this.searchFocusSeq += 1;
+
+        await this.waitForMessageDomStable();
+
+
+        this.scrollToMessage(messageId, {
+          positionRatio: 0.68,
+          retry: true,
+        });
+      } catch (error) {
+        console.error('[MESSAGE_CONTEXT] 검색 메시지 주변 조회 실패', error);
+      }
+    },
+
+    setMessageRef(messageId, el) {
+      if (!messageId) {
+        return;
+      }
+
+      const key = Number(messageId);
+
+      /**
+       * ✅ 검색 스크롤 안정화
+       *
+       * Vue function ref는 unmount 시점에 el=null로 호출될 수 있다.
+       * 이때 Map에서 제거해줘야 이전 DOM ref가 남지 않는다.
+       */
+      if (!el) {
+        this.messageRefs.delete(key);
+        return;
+      }
+
+      this.messageRefs.set(key, el);
+    },
+
+    scrollToMessage(messageId, options = {}) {
+      const {
+        positionRatio = 0.68,
+        retry = false,
+      } = options;
+
+      const container = this.$refs.list;
+
+      if (!container) {
+        console.warn('[MESSAGE_SEARCH] 메시지 컨테이너를 찾지 못함');
+        return;
+      }
+
+      /**
+       * ✅ 검색 스크롤 안정화
+       *
+       * 1순위: data-message-id로 현재 DOM에서 직접 찾는다.
+       * 2순위: messageRefs Map에서 찾는다.
+       *
+       * Map ref만 쓰면 Vue 렌더링 타이밍이나 DOM 재사용 때문에
+       * 가끔 예전 element를 보거나 null 상태일 수 있다.
+       */
+      const selector = `[data-message-id="${String(messageId)}"]`;
+      const target =
+          container.querySelector(selector) ||
+          this.messageRefs.get(Number(messageId));
+
+      if (!target) {
+        console.warn('[MESSAGE_SEARCH] 스크롤 대상 메시지를 찾지 못함', messageId);
+
+        /**
+         * ✅ 검색 스크롤 안정화
+         *
+         * 이미지/파일/시스템 메시지 등으로 DOM 높이 계산이 늦어지는 경우가 있어서
+         * 한 번 더 재시도한다.
+         */
+        if (retry) {
+          if (this.searchScrollTimer) {
+            clearTimeout(this.searchScrollTimer);
+          }
+
+          this.searchScrollTimer = setTimeout(() => {
+            this.scrollToMessage(messageId, {
+              positionRatio,
+              retry: false,
+            });
+          }, 120);
+        }
+
+        return;
+      }
+
+      const containerRect = container.getBoundingClientRect();
+      const targetRect = target.getBoundingClientRect();
+
+      /**
+       * ✅ 검색 스크롤 안정화
+       *
+       * target이 현재 컨테이너 안에서 어느 위치에 있는지 계산한다.
+       *
+       * targetRect.top - containerRect.top:
+       * - 현재 화면에서 target이 컨테이너 상단으로부터 얼마나 떨어져 있는지
+       *
+       * container.clientHeight * positionRatio:
+       * - target을 화면의 몇 % 지점에 둘지 결정
+       *
+       * 예:
+       * positionRatio = 0.68
+       * → 검색 대상 메시지가 화면 높이의 약 68% 지점, 즉 하단 쪽에 위치한다.
+       */
+      const targetCurrentTop = targetRect.top - containerRect.top;
+      const desiredTop = container.clientHeight * positionRatio;
+
+      let nextScrollTop =
+          container.scrollTop +
+          targetCurrentTop -
+          desiredTop +
+          targetRect.height / 2;
+
+      const maxScrollTop = container.scrollHeight - container.clientHeight;
+
+      if (nextScrollTop < 0) {
+        nextScrollTop = 0;
+      }
+
+      if (nextScrollTop > maxScrollTop) {
+        nextScrollTop = maxScrollTop;
+      }
+
+      container.scrollTo({
+        top: nextScrollTop,
+        behavior: 'smooth',
+      });
+    },
+
+    async waitForMessageDomStable() {
+      /**
+       * ✅ 검색 스크롤 안정화
+       *
+       * this.$nextTick():
+       * - Vue가 DOM 업데이트를 끝낼 때까지 대기
+       *
+       * requestAnimationFrame 2번:
+       * - 브라우저가 실제 레이아웃 계산을 끝낼 시간을 준다.
+       *
+       * 채팅 화면은 메시지 높이가 제각각이고,
+       * 이미지/파일/시스템 메시지도 섞이기 때문에 nextTick 한 번만으로는
+       * scrollHeight/offset 계산이 덜 끝난 경우가 있다.
+       */
+      await this.$nextTick();
+
+      await new Promise((resolve) => {
+        requestAnimationFrame(() => {
+          requestAnimationFrame(resolve);
+        });
+      });
+    },
+
+    getHighlightedParts(text) {
+      const source = text || '';
+      const keyword = this.searchKeyword.trim();
+
+      if (!keyword) {
+        return [
+          {
+            text: source,
+            matched: false,
+          },
+        ];
+      }
+
+      const lowerSource = source.toLowerCase();
+      const lowerKeyword = keyword.toLowerCase();
+      const result = [];
+
+      let start = 0;
+      let index = lowerSource.indexOf(lowerKeyword);
+
+      while (index !== -1) {
+        if (index > start) {
+          result.push({
+            text: source.slice(start, index),
+            matched: false,
+          });
+        }
+
+        result.push({
+          text: source.slice(index, index + keyword.length),
+          matched: true,
+        });
+
+        start = index + keyword.length;
+        index = lowerSource.indexOf(lowerKeyword, start);
+      }
+
+      if (start < source.length) {
+        result.push({
+          text: source.slice(start),
+          matched: false,
+        });
+      }
+
+      return result;
+    },
+
+
   },
 
 };
@@ -1138,6 +1777,95 @@ export default {
   border: none;
   cursor: pointer;
   padding: 8px;
+}
+
+.message-search-open {
+  margin-left: 8px;
+  border: none;
+  border-radius: 8px;
+  padding: 6px 10px;
+  background: #f1f3f5;
+  color: #495057;
+  cursor: pointer;
+  font-size: 13px;
+  flex-shrink: 0;
+}
+
+.message-search-open:hover {
+  background: #e9ecef;
+}
+
+.message-search-bar {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-bottom: 1px solid #e9ecef;
+  background: #fafafa;
+}
+
+.message-search-input {
+  flex: 1;
+  min-width: 0;
+  height: 34px;
+  padding: 0 10px;
+  border: 1px solid #dee2e6;
+  border-radius: 8px;
+  outline: none;
+  font-size: 14px;
+}
+
+.message-search-input:focus {
+  border-color: #4dabf7;
+}
+
+.message-search-count {
+  min-width: 64px;
+  text-align: center;
+  font-size: 13px;
+  color: #495057;
+  white-space: nowrap;
+}
+
+.message-search-more,
+.message-search-close {
+  height: 34px;
+  padding: 0 10px;
+  border: 1px solid #dee2e6;
+  border-radius: 8px;
+  background: #fff;
+  cursor: pointer;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.message-search-nav:disabled,
+.message-search-more:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.message-search-highlight {
+  background: #ffe066;
+  color: inherit;
+  padding: 0 2px;
+  border-radius: 3px;
+}
+
+.message-item-wrapper.search-target-message {
+  animation: search-focus 1.2s ease;
+  border-radius: 12px;
+}
+
+@keyframes search-focus {
+  0% {
+    background-color: rgba(255, 224, 102, 0.85);
+  }
+
+  100% {
+    background-color: transparent;
+  }
 }
 
 .messages {
